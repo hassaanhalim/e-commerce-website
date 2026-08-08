@@ -1,0 +1,127 @@
+/* ============================================================
+   GOOGLE FONTS — must precede all other @import / @layer rules
+   ============================================================ */
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..800;1,14..32,300..800&display=swap");
+
+@import "tailwindcss";
+
+/* ============================================================
+   TAILWIND v4 THEME TOKENS
+   ============================================================ */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+}
+
+/* ============================================================
+   CSS DESIGN TOKENS  (semantic layer — use in component styles)
+   ============================================================ */
+:root {
+  --color-background: #fafafa;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f4f4f5;
+  --color-text-primary: #111111;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-brand: #111111;
+  --color-brand-hover: #2d2d2d;
+  --color-accent: #c8a96e;
+  --color-success: #16a34a;
+  --color-success-bg: #f0fdf4;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-info: #2563eb;
+  --color-info-bg: #eff6ff;
+}
+
+/* ============================================================
+   GLOBAL BASE STYLES
+   ============================================================ */
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background:
+      radial-gradient(circle at top, rgba(200, 169, 110, 0.12), transparent 34%),
+      linear-gradient(180deg, #ffffff 0%, #fafafa 22%, #f7f7f8 100%);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at top left, rgba(17, 17, 17, 0.03), transparent 28%),
+      var(--color-background);
+    min-height: 100vh;
+    color: var(--color-text-primary);
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  /* Global focus ring — keyboard accessible, suppressed on mouse click */
+  *:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: rgba(17, 17, 17, 0.12);
+    color: var(--color-text-primary);
+  }
+
+  img {
+    display: block;
+    max-width: 100%;
+  }
+}
+
+@layer utilities {
+  .animate-fadeIn {
+    animation: fadeIn 180ms ease-out both;
+  }
+
+  .animate-popIn {
+    animation: popIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
