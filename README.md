@@ -1,138 +1,147 @@
-# Shoe Store — E-Commerce Application
+# E-Commerce Website — Shoe Store
 
-A full-stack e-commerce shoe store web application built with React, Vite, NestJS, Prisma ORM, and PostgreSQL.
+A full-stack e-commerce application for browsing, purchasing, managing, and tracking footwear products.
 
----
-
-## 1. Project Overview
-
-The Shoe Store platform provides a modern, end-to-end shopping experience featuring:
-- **Product Catalog**: Categories, brands, search, filtering, pagination, and multi-variant stock availability.
-- **Inventory Management**: Real-time stock reservation, low-stock alerts, and transactional stock history.
-- **Cart & Wishlist**: Session-persistent guest cart/wishlist with automatic user merge upon login.
-- **Checkout & Orders**: Stock reservation, Cash on Delivery (COD), mock online payment simulation, and order tracking.
-- **Post-Purchase Operations**: Verified-buyer reviews, return/exchange request processing, and refund workflows.
-- **Admin Operations**: Analytics dashboard, audit logging, sales/inventory/customer reports, staff management, and role-based authorization.
+The application includes a customer storefront, authenticated customer accounts, inventory-aware checkout, order management, reviews, returns and exchanges, and a complete administration panel.
 
 ---
 
-## 2. Directory Structure
+## Features
 
-```
-shoe-store/
-├── frontend/                     # React + Vite frontend application
+### Customer Store
+
+- Browse products
+- Search and filtering
+- Categories and brands
+- Product variants by size and color
+- Multiple product images
+- Real-time stock availability
+- Product reviews and ratings
+- Guest and authenticated cart
+- Wishlist
+- Customer addresses
+- Checkout
+- Cash on Delivery
+- Order history
+- Order tracking
+- Returns and exchanges
+
+### Inventory
+
+- Variant-level stock management
+- Stock adjustments
+- Reserved stock during checkout
+- Available-stock calculation
+- Low-stock monitoring
+- Inventory adjustment history
+- Transaction-safe stock updates
+
+### Orders
+
+- Checkout sessions
+- Inventory reservation
+- Order creation
+- Order-status tracking
+- Customer cancellation
+- Admin order management
+- Payment-status management
+- Public order tracking
+
+### Reviews and Returns
+
+- Verified-purchase reviews
+- Review moderation
+- Product rating calculations
+- Return requests
+- Exchange requests
+- Replacement-stock reservation
+- Refund calculations
+- Admin return and exchange management
+
+### Administration
+
+- Dashboard
+- Product management
+- Category management
+- Brand management
+- Inventory management
+- Order management
+- Customer management
+- Staff management
+- Review moderation
+- Return and exchange management
+- Reports
+- Audit logs
+
+---
+
+## Technology Stack
+
+### Frontend
+
+- React
+- Vite
+- TypeScript
+- Tailwind CSS
+- React Router
+- Context API
+
+### Backend
+
+- NestJS
+- TypeScript
+- Prisma ORM
+- PostgreSQL
+- JWT authentication
+- HttpOnly cookies
+- Passport
+- class-validator
+- Swagger
+
+---
+
+## Project Structure
+
+```text
+e-commerce-website/
+│
+├── frontend/
+│   ├── public/
 │   ├── src/
-│   │   ├── components/          # Reusable UI, layout & admin components
-│   │   ├── context/             # AuthContext, CartContext, WishlistContext
-│   │   ├── pages/               # Public, Customer Account, and Admin pages
-│   │   ├── services/            # Fetch-based API client services
-│   │   ├── types/               # TypeScript type definitions
-│   │   └── utils/               # Formatter & helper utilities
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── types/
+│   │   └── utils/
+│   │
 │   ├── .env.example
+│   ├── package.json
 │   └── vite.config.ts
-├── server/                       # NestJS backend application
-│   ├── src/
-│   │   ├── addresses/           # Customer shipping address module
-│   │   ├── admin/               # Admin dashboard, staff, customers & reports
-│   │   ├── audit/               # Audit log module
-│   │   ├── auth/                # JWT + HttpOnly cookie authentication
-│   │   ├── cart/                # Backend cart module
-│   │   ├── catalog/             # Public & Admin catalog module
-│   │   ├── checkout/            # Checkout preview & stock reservation session module
-│   │   ├── health/              # Health & database connectivity module
-│   │   ├── orders/              # Orders, payment & tracking module
-│   │   ├── returns/             # Returns & exchanges module
-│   │   ├── reviews/             # Product reviews & moderation module
-│   │   ├── security/            # Request safety & origin validation middleware
-│   │   └── wishlist/            # Customer wishlist module
+│
+├── server/
 │   ├── prisma/
-│   │   ├── migrations/          # Applied PostgreSQL database migrations
-│   │   └── schema.prisma        # Prisma ORM data schema definition
-│   └── .env.example
-├── DEPLOYMENT.md                 # Production deployment & operations guide
-└── README.md                     # Root project documentation
-```
-
----
-
-## 3. Technology Stack
-
-- **Frontend**: React 18+, Vite, TypeScript, Tailwind CSS, React Router v7
-- **Backend**: NestJS, TypeScript, Prisma ORM, PostgreSQL, Passport JWT, Swagger
-- **Authentication**: Access + Refresh Tokens in HttpOnly SameSite Cookies
-- **Validation**: `class-validator`, `class-transformer` with global ValidationPipe
-
----
-
-## 4. Local Development Setup
-
-### Prerequisites
-- Node.js (v18 or higher)
-- PostgreSQL database server (v14 or higher)
-
-### Step 1: Database Configuration
-Ensure PostgreSQL is running locally and create a database named `shoe_store`.
-
-### Step 2: Backend Setup
-```bash
-cd server
-cp .env.example .env
-# Update DATABASE_URL, JWT_ACCESS_SECRET, and REFRESH_TOKEN_HASH_SECRET in server/.env
-
-npm install
-npx prisma generate
-npx prisma migrate dev
-npm run start:dev
-```
-Backend API server will run at: `http://localhost:3001/api/v1`
-Swagger API Documentation: `http://localhost:3001/api/docs`
-
-### Step 3: Frontend Setup
-```bash
-cd frontend
-cp .env.example .env
-npm install
-npm run dev
-```
-Frontend development server will run at: `http://localhost:5173`
-
----
-
-## 5. Environment Variables
-
-### Backend (`server/.env`)
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/shoe_store` |
-| `PORT` | API server listening port | `3001` |
-| `NODE_ENV` | Environment mode | `development` / `production` |
-| `FRONTEND_URL` | Trusted primary frontend URL | `http://localhost:5173` |
-| `TRUSTED_ORIGINS` | Comma-separated CORS origins | `http://localhost:5173,http://localhost:5174` |
-| `JWT_ACCESS_SECRET` | Secret key for JWT access tokens | `your_access_token_secret` |
-| `REFRESH_TOKEN_HASH_SECRET` | Secret key for refresh token hashes | `your_refresh_hash_secret` |
-| `JWT_ACCESS_TTL_SECONDS` | Access token lifespan (seconds) | `900` |
-| `REFRESH_TOKEN_TTL_DAYS` | Refresh token lifespan (days) | `30` |
-| `COOKIE_SECURE` | HttpOnly cookie secure flag | `false` (dev) / `true` (prod) |
-| `COOKIE_SAMESITE` | Cookie SameSite strategy | `lax` / `strict` / `none` |
-| `RETURN_WINDOW_DAYS` | Return eligibility window | `14` |
-
-### Frontend (`frontend/.env`)
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `VITE_API_URL` | Full backend API base URL | `http://localhost:3001/api/v1` |
-
----
-
-## 6. Known Development-Only Limitations
-
-> [!IMPORTANT]
-> **Mock Online Payment Gateway**: The `MOCK_ONLINE` payment method is a development simulation endpoint used to verify order payment transitions. No real credit card or payment gateway integration is present. **Do not enter real payment card data.** Before deploying to production for real online payments, integrate a payment gateway (e.g. Stripe, PayPal).
-
----
-
-## 7. Operational & Build Commands
-
-- **Run Backend Production Build**: `npm run build` (inside `server`)
-- **Start Backend Production Server**: `npm run start:prod` (inside `server`)
-- **Run Frontend Production Build**: `npm run build` (inside `frontend`)
-- **Health Check Endpoint**: `GET /api/v1/health` and `GET /api/v1/health/database`
+│   │   ├── migrations/
+│   │   └── schema.prisma
+│   │
+│   ├── src/
+│   │   ├── addresses/
+│   │   ├── admin/
+│   │   ├── audit/
+│   │   ├── auth/
+│   │   ├── cart/
+│   │   ├── catalog/
+│   │   ├── checkout/
+│   │   ├── health/
+│   │   ├── orders/
+│   │   ├── returns/
+│   │   ├── reviews/
+│   │   ├── security/
+│   │   └── wishlist/
+│   │
+│   ├── .env.example
+│   └── package.json
+│
+├── .gitignore
+├── README.md
+└── DEPLOYMENT.md
