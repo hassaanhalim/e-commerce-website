@@ -1,12 +1,13 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "incremental": false
+    "baseUrl": "./",
+    "ignoreDeprecations": "6.0"
   },
   "exclude": [
     "node_modules",
-    "dist",
     "test",
-    "**/*.spec.ts"
+    "dist",
+    "**/*spec.ts"
   ]
 }
