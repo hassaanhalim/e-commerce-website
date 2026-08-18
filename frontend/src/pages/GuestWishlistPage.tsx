@@ -85,7 +85,7 @@ export function GuestWishlistPage() {
       price,
       size: selectedSize,
       color: selectedColor,
-      stock: 99,
+      stock: selectedProduct.availableQuantity ?? 0,
     });
 
     // Remove from wishlist

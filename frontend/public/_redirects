@@ -1,0 +1,5 @@
+# SPA rewrite rule — required for React Router on static hosting
+# Platforms: Netlify, Cloudflare Pages, and any host that respects this convention
+# All paths are rewritten to index.html so the React Router handles routing client-side.
+# Direct navigation to /products/x, /account/orders, /admin/products etc. will work correctly.
+/*    /index.html   200
