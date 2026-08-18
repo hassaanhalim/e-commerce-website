@@ -16,10 +16,18 @@
     "strict": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-
-    "types": ["node", "jest"],
-    "moduleResolution": "node16"
+    "types": [
+      "node",
+      "jest"
+    ],
+    "moduleResolution": "node"
   },
-  "include": ["src/**/*", "test/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*",
+    "test/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }
