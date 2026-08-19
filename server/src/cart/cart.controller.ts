@@ -20,7 +20,7 @@ import { MergeCartDto } from "./dto/merge-cart.dto";
 @Controller("cart")
 @Roles("CUSTOMER")
 export class CartController {
-  constructor(private readonly cartService: CartService) {}
+  constructor(private readonly cartService: CartService) { }
 
   @Get()
   getCart(@CurrentUser() user: AuthenticatedUser) {

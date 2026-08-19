@@ -36,7 +36,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
-  ) {}
+  ) { }
 
   private generateOrderNumber(): string {
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -230,22 +230,24 @@ export class OrdersService {
         const quantityOnHand = inventory.quantityOnHand;
         const reservedQuantity = inventory.reservedQuantity;
         const qty = item.quantity;
+        const availableQuantity = Math.max(0, quantityOnHand - reservedQuantity);
 
-        if (quantityOnHand < qty || reservedQuantity < qty) {
+        if (quantityOnHand < qty) {
           throw new BadRequestException(
-            `Insufficient reserved stock for variant "${item.skuSnapshot}".`,
+            `Insufficient stock for variant "${item.skuSnapshot}". Available: ${availableQuantity}, Requested: ${qty}`,
           );
         }
 
-        const afterOnHand = quantityOnHand - qty;
-        const afterReserved = reservedQuantity - qty;
+        const afterOnHand = Math.max(0, quantityOnHand - qty);
+        const reservedDelta = reservedQuantity >= qty ? -qty : -reservedQuantity;
+        const afterReserved = Math.max(0, reservedQuantity - qty);
 
         await tx.inventoryAdjustment.create({
           data: {
             inventoryId: inventory.id,
             type: InventoryAdjustmentType.SALE,
             onHandDelta: -qty,
-            reservedDelta: -qty,
+            reservedDelta,
             beforeOnHand: quantityOnHand,
             afterOnHand,
             beforeReserved: reservedQuantity,
@@ -277,7 +279,7 @@ export class OrdersService {
       }
 
       return order;
-    });
+    }, { maxWait: 10000, timeout: 25000 });
   }
 
   // ── 2. Customer List Orders ────────────────────────────────────────────────
@@ -739,15 +741,15 @@ export class OrdersService {
             status: nextOrderStatus,
             ...(nextOrderStatus !== order.status
               ? {
-                  statusHistory: {
-                    create: {
-                      fromStatus: order.status,
-                      toStatus: nextOrderStatus,
-                      note: "Payment completed successfully via Mock Online Gateway",
-                      changedById: userId,
-                    },
+                statusHistory: {
+                  create: {
+                    fromStatus: order.status,
+                    toStatus: nextOrderStatus,
+                    note: "Payment completed successfully via Mock Online Gateway",
+                    changedById: userId,
                   },
-                }
+                },
+              }
               : {}),
           },
           include: { items: true, payments: true, statusHistory: { orderBy: { createdAt: "asc" } } },

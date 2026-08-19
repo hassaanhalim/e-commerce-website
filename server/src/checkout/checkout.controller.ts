@@ -16,7 +16,7 @@ import { CheckoutPreviewDto, CreateCheckoutSessionDto } from "./dto/checkout.dto
 @Controller("checkout")
 @Roles("CUSTOMER")
 export class CheckoutController {
-  constructor(private readonly checkoutService: CheckoutService) {}
+  constructor(private readonly checkoutService: CheckoutService) { }
 
   @Post("preview")
   preview(

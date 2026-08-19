@@ -28,7 +28,7 @@ import { OrdersService } from "./orders.service";
 @Roles(UserRole.CUSTOMER)
 @Controller("orders")
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(private readonly ordersService: OrdersService) { }
 
   @Post()
   @ApiOperation({ summary: "Create an order from an active checkout session (Customer)" })

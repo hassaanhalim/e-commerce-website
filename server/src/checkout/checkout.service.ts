@@ -266,7 +266,8 @@ export class CheckoutService {
     }
 
     // Perform everything in a transaction
-    const session = await this.prisma.$transaction(async (tx) => {
+    const session = await this.prisma.$transaction(
+      async (tx) => {
       // Load cart with locking
       const cart = await tx.cart.findUnique({
         where: { userId },
@@ -418,7 +419,7 @@ export class CheckoutService {
       });
 
       return newSession;
-    });
+    }, { maxWait: 10000, timeout: 25000 });
 
     return this.serializeSession(session);
   }
