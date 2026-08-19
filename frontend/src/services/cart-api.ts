@@ -7,11 +7,23 @@ import type {
 export const cartApi = {
   getCart: () => apiRequest<BackendCart>("/cart", { method: "GET" }),
 
-  addItem: (variantId: string, quantity: number, productId?: string) =>
-    apiRequest<BackendCart>("/cart/items", {
+  /**
+   * The backend POST /cart/items returns only the raw CartItem DB record
+   * ({ id, cartId, variantId, quantity }), not a full BackendCart.
+   * We follow up with getCart() so the caller always receives a BackendCart
+   * with the expected { cartId, items, subtotal, itemCount } shape.
+   */
+  addItem: async (
+    variantId: string,
+    quantity: number,
+    productId?: string,
+  ): Promise<BackendCart> => {
+    await apiRequest<unknown>("/cart/items", {
       method: "POST",
       body: JSON.stringify({ variantId, quantity, ...(productId ? { productId } : {}) }),
-    }),
+    });
+    return apiRequest<BackendCart>("/cart", { method: "GET" });
+  },
 
   updateItem: (itemId: string, quantity: number) =>
     apiRequest<object>(`/cart/items/${itemId}`, {

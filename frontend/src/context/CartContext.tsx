@@ -237,8 +237,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             prev
               ? {
                   ...prev,
-                  items: prev.items.filter((i) => i.itemId !== itemId),
-                  itemCount: prev.itemCount - (prev.items.find((i) => i.itemId === itemId)?.quantity ?? 0),
+                  items: (prev.items ?? []).filter((i) => i.itemId !== itemId),
+                  itemCount: prev.itemCount - ((prev.items ?? []).find((i) => i.itemId === itemId)?.quantity ?? 0),
                 }
               : prev,
           );

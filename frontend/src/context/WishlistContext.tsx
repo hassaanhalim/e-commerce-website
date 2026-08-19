@@ -58,7 +58,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
     setIsLoadingWishlist(true);
     try {
       const result = await wishlistApi.getWishlist();
-      setBackendProducts(result.products);
+      setBackendProducts(result.products ?? []);
     } catch {
       setBackendProducts([]);
     } finally {
@@ -83,17 +83,17 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         if (guestWishlist.length > 0 && !mergedRef.current) {
           mergedRef.current = true;
           const result = await wishlistApi.mergeWishlist(guestWishlist);
-          setBackendProducts(result.products);
+          setBackendProducts(result.products ?? []);
           localStorage.removeItem(GUEST_KEY);
           setGuestIds([]);
         } else {
           const result = await wishlistApi.getWishlist();
-          setBackendProducts(result.products);
+          setBackendProducts(result.products ?? []);
         }
       } catch {
         try {
           const result = await wishlistApi.getWishlist();
-          setBackendProducts(result.products);
+          setBackendProducts(result.products ?? []);
         } catch {
           setBackendProducts([]);
         }
@@ -125,7 +125,7 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
         } else {
           try {
             const result = await wishlistApi.addItem(productId);
-            setBackendProducts(result.products);
+            setBackendProducts(result.products ?? []);
           } catch {
             // ignore – e.g. inactive product
           }
