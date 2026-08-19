@@ -11,27 +11,27 @@ export function AccountLayout() {
   };
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
+    `flex items-center gap-3 rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
       isActive
-        ? "bg-gray-950 text-white shadow-sm"
-        : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+        ? "bg-[#748779] text-white shadow-2xs"
+        : "text-[#667085] hover:bg-[#F7F5F1] hover:text-[#20252B]"
     }`;
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-gray-50 py-10">
+    <div className="min-h-[calc(100vh-64px)] bg-[#FBFAF7] py-10">
       <div className="mx-auto max-w-7xl px-5 sm:px-6">
         <div className="flex flex-col gap-8 md:flex-row">
           {/* Account Sidebar Navigation */}
           <aside className="w-full shrink-0 md:w-64">
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="rounded-2xl border border-[#E7E3DC] bg-white p-5 shadow-2xs">
               {/* Profile Card Summary */}
-              <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-950 text-sm font-bold text-white">
+              <div className="flex items-center gap-3 border-b border-[#E7E3DC] pb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#748779] text-sm font-bold text-white shadow-2xs">
                   {user?.fullName.charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="truncate text-sm font-bold text-gray-900">{user?.fullName}</h3>
-                  <p className="mt-0.5 truncate text-xs text-gray-400">{user?.email}</p>
+                  <h3 className="truncate text-sm font-bold text-[#20252B]">{user?.fullName}</h3>
+                  <p className="mt-0.5 truncate text-xs text-[#667085]">{user?.email}</p>
                 </div>
               </div>
 
@@ -82,11 +82,11 @@ export function AccountLayout() {
               </nav>
 
               {/* Logout button */}
-              <div className="mt-3 border-t border-gray-100 pt-3">
+              <div className="mt-3 border-t border-[#E7E3DC] pt-3">
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl px-4 py-2.5 text-xs font-semibold text-[#B9785D] transition hover:bg-[#FEF2F2]"
                 >
                   <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

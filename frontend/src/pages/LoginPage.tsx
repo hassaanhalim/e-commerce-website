@@ -67,23 +67,23 @@ function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-72px)] max-w-7xl items-center justify-center px-5 py-12 sm:px-6">
-      <section className="w-full max-w-md rounded-3xl border border-gray-200 bg-white p-7 shadow-sm sm:p-9">
-        <p className="text-sm font-semibold uppercase tracking-wider text-gray-500">
+    <main className="mx-auto flex min-h-[calc(100vh-72px)] max-w-7xl items-center justify-center px-5 py-12 sm:px-6 bg-[#FBFAF7]">
+      <section className="w-full max-w-md rounded-3xl border border-[#E7E3DC] bg-white p-7 shadow-2xs sm:p-9">
+        <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#748779]">
           Welcome back
         </p>
 
-        <h1 className="mt-2 text-3xl font-bold text-gray-950">
+        <h1 className="mt-1.5 text-3xl font-bold text-[#20252B]">
           Sign in
         </h1>
 
-        <p className="mt-3 text-sm leading-6 text-gray-600">
+        <p className="mt-2 text-sm leading-relaxed text-[#667085]">
           Access your account, orders, addresses and wishlist.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <form onSubmit={handleSubmit} className="mt-7 space-y-4.5">
           <div>
-            <label htmlFor="loginEmail" className="text-sm font-medium text-gray-900">
+            <label htmlFor="loginEmail" className="text-xs font-bold uppercase tracking-wider text-[#667085]">
               Email address
             </label>
 
@@ -92,13 +92,13 @@ function LoginPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+              className="mt-1.5 w-full rounded-xl border border-[#E7E3DC] bg-white px-4 py-2.5 text-sm text-[#20252B] outline-none transition focus:border-[#748779] focus:ring-1 focus:ring-[#748779] placeholder:text-[#667085]"
               placeholder="name@example.com"
             />
           </div>
 
           <div>
-            <label htmlFor="loginPassword" className="text-sm font-medium text-gray-900">
+            <label htmlFor="loginPassword" className="text-xs font-bold uppercase tracking-wider text-[#667085]">
               Password
             </label>
 
@@ -107,13 +107,13 @@ function LoginPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none transition focus:border-black focus:ring-1 focus:ring-black"
+              className="mt-1.5 w-full rounded-xl border border-[#E7E3DC] bg-white px-4 py-2.5 text-sm text-[#20252B] outline-none transition focus:border-[#748779] focus:ring-1 focus:ring-[#748779] placeholder:text-[#667085]"
               placeholder="Enter your password"
             />
           </div>
 
           {error && (
-            <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p className="rounded-xl bg-[#FEF2F2] border border-[#DC2626]/20 px-4 py-2.5 text-xs font-medium text-[#DC2626]">
               {error}
             </p>
           )}
@@ -121,15 +121,15 @@ function LoginPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full rounded-xl bg-black px-6 py-3.5 font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-70"
+            className="w-full rounded-xl bg-[#748779] px-6 py-3 font-semibold text-white shadow-xs transition hover:bg-[#5E7063] disabled:cursor-not-allowed disabled:opacity-70 cursor-pointer"
           >
             {isLoading ? "Loading..." : "Sign In"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-600">
+        <p className="mt-6 text-center text-xs text-[#667085]">
           Do not have an account?{" "}
-          <Link to="/register" className="font-semibold text-black underline">
+          <Link to="/register" className="font-semibold text-[#748779] underline hover:text-[#5E7063]">
             Create one
           </Link>
         </p>

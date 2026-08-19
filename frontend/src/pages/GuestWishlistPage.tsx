@@ -123,8 +123,8 @@ export function GuestWishlistPage() {
 
       {/* Title */}
       <div>
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Shopping Wishlist</h1>
-        <p className="mt-1.5 text-sm font-semibold text-gray-500 uppercase tracking-wider">
+        <h1 className="text-3xl font-bold text-[#20252B] tracking-tight">Shopping Wishlist</h1>
+        <p className="mt-1 text-xs font-bold text-[#748779] uppercase tracking-wider">
           Review saved products and size options.
         </p>
       </div>
@@ -132,8 +132,8 @@ export function GuestWishlistPage() {
       {/* Grid of Wishlist Items */}
       {loading ? (
         <div className="py-20 text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-black border-t-transparent"></div>
-          <p className="mt-3 text-xs font-semibold text-gray-400">Loading wishlist products...</p>
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-[#748779] border-t-transparent"></div>
+          <p className="mt-3 text-xs font-semibold text-[#667085]">Loading wishlist products...</p>
         </div>
       ) : (
         <section className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">

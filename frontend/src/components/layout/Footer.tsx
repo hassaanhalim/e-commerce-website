@@ -1,18 +1,19 @@
-﻿import { Link } from "react-router";
+import { Link } from "react-router";
 
 function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-gray-200 bg-white">
+    <footer className="border-t border-[#E7E3DC] bg-[#F7F5F1]">
       <div className="mx-auto max-w-7xl px-5 py-14 sm:px-6">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="sm:col-span-2 lg:col-span-1">
-            <Link to="/" className="text-xl font-bold tracking-tight text-gray-950">
-              Shoe Store
+            <Link to="/" className="text-xl font-bold tracking-tight text-[#20252B] flex items-center gap-1.5">
+              <span>Shoe Store</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#748779]"></span>
             </Link>
-            <p className="mt-3 max-w-xs text-sm leading-7 text-gray-500">
+            <p className="mt-3 max-w-xs text-sm leading-relaxed text-[#667085]">
               Quality footwear for everyday comfort, professional settings and
               active lifestyles.
             </p>
@@ -20,8 +21,8 @@ function Footer() {
 
           {/* Shop */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-gray-950">Shop</h3>
-            <ul className="mt-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-[#20252B]">Shop</h3>
+            <ul className="mt-4 space-y-2.5">
               {[
                 { to: "/shop?gender=Men", label: "Men" },
                 { to: "/shop?gender=Women", label: "Women" },
@@ -29,7 +30,7 @@ function Footer() {
                 { to: "/shop", label: "All Products" },
               ].map(({ to, label }) => (
                 <li key={to}>
-                  <Link to={to} className="text-sm text-gray-500 transition hover:text-gray-950">
+                  <Link to={to} className="text-sm font-medium text-[#667085] transition hover:text-[#748779]">
                     {label}
                   </Link>
                 </li>
@@ -39,8 +40,8 @@ function Footer() {
 
           {/* Customer service */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-gray-950">Help</h3>
-            <ul className="mt-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-[#20252B]">Help</h3>
+            <ul className="mt-4 space-y-2.5">
               {[
                 { to: "/contact", label: "Contact Us" },
                 { to: "/size-guide", label: "Size Guide" },
@@ -48,7 +49,7 @@ function Footer() {
                 { to: "/shipping-policy", label: "Shipping Policy" },
               ].map(({ to, label }) => (
                 <li key={to}>
-                  <Link to={to} className="text-sm text-gray-500 transition hover:text-gray-950">
+                  <Link to={to} className="text-sm font-medium text-[#667085] transition hover:text-[#748779]">
                     {label}
                   </Link>
                 </li>
@@ -58,8 +59,8 @@ function Footer() {
 
           {/* Account */}
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-gray-950">Account</h3>
-            <ul className="mt-4 space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-[#20252B]">Account</h3>
+            <ul className="mt-4 space-y-2.5">
               {[
                 { to: "/login", label: "Sign In" },
                 { to: "/register", label: "Register" },
@@ -68,7 +69,7 @@ function Footer() {
                 { to: "/wishlist", label: "My Wishlist" },
               ].map(({ to, label }) => (
                 <li key={to}>
-                  <Link to={to} className="text-sm text-gray-500 transition hover:text-gray-950">
+                  <Link to={to} className="text-sm font-medium text-[#667085] transition hover:text-[#748779]">
                     {label}
                   </Link>
                 </li>
@@ -78,15 +79,15 @@ function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-gray-200 pt-8 sm:flex-row">
-          <p className="text-sm text-gray-400">
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[#E7E3DC] pt-8 sm:flex-row">
+          <p className="text-xs text-[#667085]">
             &copy; {year} Shoe Store. All rights reserved.
           </p>
           <div className="flex gap-6">
-            <Link to="/privacy-policy" className="text-sm text-gray-400 transition hover:text-gray-950">
+            <Link to="/privacy-policy" className="text-xs text-[#667085] transition hover:text-[#748779]">
               Privacy Policy
             </Link>
-            <Link to="/terms" className="text-sm text-gray-400 transition hover:text-gray-950">
+            <Link to="/terms" className="text-xs text-[#667085] transition hover:text-[#748779]">
               Terms of Service
             </Link>
           </div>

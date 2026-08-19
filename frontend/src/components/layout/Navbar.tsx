@@ -58,7 +58,7 @@ function IconUser({ className = "h-5 w-5" }: { className?: string }) {
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gray-950 px-1 text-[10px] font-bold leading-none text-white">
+    <span className="absolute -right-1.5 -top-1.5 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[#748779] px-1 text-[10px] font-bold leading-none text-white shadow-xs">
       {count > 99 ? "99+" : count}
     </span>
   );
@@ -90,10 +90,10 @@ function Navbar() {
   }, [mobileMenuOpen]);
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `relative pb-0.5 text-sm font-medium transition-colors ${
+    `relative py-1 text-sm font-medium transition-colors ${
       isActive
-        ? "text-gray-950 after:absolute after:inset-x-0 after:-bottom-0.5 after:h-0.5 after:rounded-full after:bg-gray-950"
-        : "text-gray-500 hover:text-gray-900"
+        ? "text-[#20252B] font-semibold after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-[#748779]"
+        : "text-[#667085] hover:text-[#20252B]"
     }`;
 
   function handleSearch(event: FormEvent<HTMLFormElement>) {
@@ -113,20 +113,21 @@ function Navbar() {
   const closeMobile = () => setMobileMenuOpen(false);
 
   const mobileLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center border-b border-gray-100 py-3.5 text-sm font-semibold transition-colors ${
-      isActive ? "text-gray-950" : "text-gray-500 hover:text-gray-900"
+    `flex items-center border-b border-[#E7E3DC] py-3.5 text-sm font-semibold transition-colors ${
+      isActive ? "text-[#748779]" : "text-[#667085] hover:text-[#20252B]"
     }`;
 
   const wishlistPath = user?.role === "CUSTOMER" ? "/account/wishlist" : "/wishlist";
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-gray-200 bg-white/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 border-b border-[#E7E3DC] bg-[#FBFAF7]/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-5 px-5 sm:px-6">
 
           {/* Logo */}
-          <Link to="/" className="shrink-0 text-xl font-bold tracking-tight text-gray-950">
-            Shoe Store
+          <Link to="/" className="shrink-0 text-xl font-bold tracking-tight text-[#20252B] flex items-center gap-1.5">
+            <span>Shoe Store</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-[#748779]"></span>
           </Link>
 
           {/* Desktop nav */}
@@ -138,8 +139,8 @@ function Navbar() {
           {/* Desktop search */}
           <form onSubmit={handleSearch} className="hidden min-w-0 flex-1 md:flex" role="search">
             <label htmlFor="desktopSearch" className="sr-only">Search products</label>
-            <div className="flex w-full items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50 transition focus-within:border-gray-400 focus-within:bg-white">
-              <span className="shrink-0 pl-3 text-gray-400">
+            <div className="flex w-full items-center overflow-hidden rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] transition focus-within:border-[#748779] focus-within:bg-white focus-within:ring-1 focus-within:ring-[#748779]">
+              <span className="shrink-0 pl-3 text-[#667085]">
                 <IconSearch className="h-4 w-4" />
               </span>
               <input
@@ -148,11 +149,11 @@ function Navbar() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search shoes, brands, categories…"
-                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-[#20252B] outline-none placeholder:text-[#667085]"
               />
               <button
                 type="submit"
-                className="shrink-0 border-l border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-gray-900"
+                className="shrink-0 border-l border-[#E7E3DC] px-4 py-2 text-sm font-semibold text-[#667085] transition hover:bg-[#FAF9F6] hover:text-[#20252B]"
               >
                 Search
               </button>
@@ -160,13 +161,13 @@ function Navbar() {
           </form>
 
           {/* Desktop right actions */}
-          <div className="ml-auto hidden items-center gap-0.5 lg:flex">
+          <div className="ml-auto hidden items-center gap-1 lg:flex">
             {!isLoading && !user && (
               <>
                 <NavLink to="/login" className={desktopLinkClass}>Login</NavLink>
                 <Link
                   to="/register"
-                  className="ml-3 rounded-lg bg-gray-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800"
+                  className="ml-3 rounded-xl bg-[#748779] px-4.5 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-[#5E7063]"
                 >
                   Register
                 </Link>
@@ -177,7 +178,7 @@ function Navbar() {
               <NavLink
                 to="/account"
                 aria-label="My account"
-                className="flex items-center justify-center rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+                className="flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
               >
                 <IconUser />
               </NavLink>
@@ -191,7 +192,7 @@ function Navbar() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="ml-2 text-sm font-medium text-gray-500 transition hover:text-gray-900"
+                className="ml-2 text-sm font-medium text-[#667085] transition hover:text-[#20252B]"
               >
                 Logout
               </button>
@@ -200,7 +201,7 @@ function Navbar() {
             <NavLink
               to={wishlistPath}
               aria-label={`Wishlist${wishlistCount > 0 ? `, ${wishlistCount} items` : ""}`}
-              className="relative ml-1 flex items-center justify-center rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+              className="relative ml-1 flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
             >
               <IconHeart />
               <Badge count={wishlistCount} />
@@ -209,7 +210,7 @@ function Navbar() {
             <NavLink
               to="/cart"
               aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
-              className="relative flex items-center justify-center rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+              className="relative flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
             >
               <IconBag />
               <Badge count={cartCount} />
@@ -221,7 +222,7 @@ function Navbar() {
             <NavLink
               to={wishlistPath}
               aria-label={`Wishlist${wishlistCount > 0 ? `, ${wishlistCount} items` : ""}`}
-              className="relative flex items-center justify-center rounded-lg p-2 text-gray-500"
+              className="relative flex items-center justify-center rounded-xl p-2 text-[#667085]"
             >
               <IconHeart />
               <Badge count={wishlistCount} />
@@ -230,7 +231,7 @@ function Navbar() {
             <NavLink
               to="/cart"
               aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
-              className="relative flex items-center justify-center rounded-lg p-2 text-gray-500"
+              className="relative flex items-center justify-center rounded-xl p-2 text-[#667085]"
             >
               <IconBag />
               <Badge count={cartCount} />
@@ -241,7 +242,7 @@ function Navbar() {
               aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen((v) => !v)}
-              className="ml-1 flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 transition hover:bg-gray-50"
+              className="ml-1 flex items-center justify-center rounded-xl border border-[#E7E3DC] p-2 text-[#20252B] transition hover:bg-[#F7F5F1]"
             >
               {mobileMenuOpen ? <IconClose /> : <IconMenu />}
             </button>
@@ -250,9 +251,9 @@ function Navbar() {
 
         {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="border-t border-gray-100 bg-white px-5 pb-6 pt-2 lg:hidden">
-            <form onSubmit={handleSearch} className="mt-2 flex items-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50" role="search">
-              <span className="pl-3 text-gray-400">
+          <div className="border-t border-[#E7E3DC] bg-[#FBFAF7] px-5 pb-6 pt-2 lg:hidden">
+            <form onSubmit={handleSearch} className="mt-2 flex items-center overflow-hidden rounded-xl border border-[#E7E3DC] bg-[#F7F5F1]" role="search">
+              <span className="pl-3 text-[#667085]">
                 <IconSearch />
               </span>
               <input
@@ -260,9 +261,9 @@ function Navbar() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search products…"
-                className="min-w-0 flex-1 bg-transparent px-3 py-3 text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm text-[#20252B] outline-none placeholder:text-[#667085]"
               />
-              <button type="submit" className="border-l border-gray-200 px-4 py-3 text-sm font-semibold text-gray-600 transition hover:bg-gray-100">
+              <button type="submit" className="border-l border-[#E7E3DC] px-4 py-2.5 text-sm font-semibold text-[#667085] transition hover:bg-[#FAF9F6]">
                 Go
               </button>
             </form>
@@ -293,7 +294,7 @@ function Navbar() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="mt-4 w-full rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-500 transition hover:border-gray-300 hover:text-gray-900"
+                  className="mt-4 w-full rounded-xl border border-[#E7E3DC] py-2.5 text-sm font-semibold text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
                 >
                   Sign Out
                 </button>
@@ -306,7 +307,7 @@ function Navbar() {
       {/* Mobile overlay */}
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 lg:hidden"
+          className="fixed inset-0 z-40 bg-[#20252B]/30 backdrop-blur-xs lg:hidden"
           onClick={closeMobile}
           aria-hidden="true"
         />

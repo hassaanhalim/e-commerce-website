@@ -45,28 +45,28 @@ function ProductCard({ product }: ProductCardProps) {
   }
 
   return (
-    <article className="group overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition hover:shadow-md">
+    <article className="group overflow-hidden rounded-2xl border border-[#E7E3DC] bg-white shadow-2xs transition duration-300 hover:border-[#D8C7B2] hover:shadow-sm">
       <Link to={`/products/${product.slug}`} className="block">
-        <div className="relative overflow-hidden bg-gray-100">
+        <div className="relative overflow-hidden bg-[#F7F5F1]">
           <img
             src={product.image}
             alt={product.name}
-            className="aspect-4/3 w-full object-cover transition duration-500 group-hover:scale-105"
+            className="aspect-4/3 w-full object-cover transition duration-500 group-hover:scale-[1.03]"
           />
 
           {/* Wishlist toggle */}
           <button
             type="button"
             onClick={handleToggleWishlist}
-            className="absolute right-3 top-3 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition hover:bg-white"
+            className="absolute right-3 top-3 z-10 flex h-8.5 w-8.5 cursor-pointer items-center justify-center rounded-full bg-white/85 shadow-xs backdrop-blur-xs transition hover:bg-white hover:scale-105"
             aria-label={isLiked ? "Remove from wishlist" : "Add to wishlist"}
           >
             <svg
-              className={`h-4 w-4 transition ${isLiked ? "fill-red-500 text-red-500" : "text-gray-500"}`}
+              className={`h-4.5 w-4.5 transition ${isLiked ? "fill-[#DC2626] text-[#DC2626]" : "text-[#667085] hover:text-[#DC2626]"}`}
               fill={isLiked ? "currentColor" : "none"}
               viewBox="0 0 24 24"
               stroke="currentColor"
-              strokeWidth={2}
+              strokeWidth={1.75}
             >
               <path
                 strokeLinecap="round"
@@ -78,36 +78,36 @@ function ProductCard({ product }: ProductCardProps) {
 
           {/* Badges */}
           {product.isNew && (
-            <span className="absolute left-3 top-3 rounded-full bg-gray-950 px-2.5 py-1 text-xs font-semibold text-white">
+            <span className="absolute left-3 top-3 rounded-full bg-[#748779] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-white shadow-2xs">
               New
             </span>
           )}
 
           {hasDiscount && !product.isNew && (
-            <span className="absolute left-3 top-3 rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white">
+            <span className="absolute left-3 top-3 rounded-full bg-[#B9785D] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-white shadow-2xs">
               Sale
             </span>
           )}
 
           {hasDiscount && product.isNew && (
-            <span className="absolute left-14 top-3 rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white">
+            <span className="absolute left-14 top-3 rounded-full bg-[#B9785D] px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-white shadow-2xs">
               Sale
             </span>
           )}
         </div>
 
         <div className="p-4">
-          <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-[#667085]">
             {product.brand}
           </p>
 
-          <h2 className="mt-1.5 font-semibold leading-snug text-gray-950 group-hover:text-gray-700 transition">
+          <h2 className="mt-1 text-sm font-semibold leading-snug text-[#20252B] transition-colors group-hover:text-[#748779]">
             {product.name}
           </h2>
 
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-1.5">
             <StarRating rating={product.rating} />
-            <span className="text-xs text-gray-400">
+            <span className="text-xs font-medium text-[#667085]">
               ({product.reviewCount})
             </span>
           </div>
@@ -115,15 +115,15 @@ function ProductCard({ product }: ProductCardProps) {
           <div className="mt-3 flex items-baseline gap-2">
             {hasDiscount ? (
               <>
-                <span className="text-base font-bold text-gray-950">
+                <span className="text-base font-bold text-[#20252B]">
                   {formatPrice(product.salePrice!)}
                 </span>
-                <span className="text-sm text-gray-400 line-through">
+                <span className="text-xs font-medium text-[#667085] line-through">
                   {formatPrice(product.price)}
                 </span>
               </>
             ) : (
-              <span className="text-base font-bold text-gray-950">
+              <span className="text-base font-bold text-[#20252B]">
                 {formatPrice(product.price)}
               </span>
             )}

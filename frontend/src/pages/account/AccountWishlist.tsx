@@ -97,15 +97,15 @@ export function AccountWishlist() {
       ) : (
         <section className="grid gap-6 sm:grid-cols-2">
           {likedProducts.length === 0 ? (
-            <div className="sm:col-span-2 rounded-2xl border border-gray-200 bg-white p-12 text-center shadow-sm">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <div className="sm:col-span-2 rounded-2xl border border-[#E7E3DC] bg-white p-12 text-center shadow-2xs">
+              <svg className="mx-auto h-12 w-12 text-[#748779]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
               </svg>
-              <h3 className="mt-4 text-lg font-bold text-gray-900">Your wishlist is empty</h3>
-              <p className="mt-2 text-sm text-gray-500 font-medium">Explore our catalog and save your favorite shoes for later.</p>
+              <h3 className="mt-4 text-lg font-bold text-[#20252B]">Your wishlist is empty</h3>
+              <p className="mt-2 text-sm text-[#667085] font-medium">Explore our catalog and save your favorite shoes for later.</p>
               <Link
                 to="/shop"
-                className="mt-6 inline-flex rounded-xl bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 transition outline-none cursor-pointer"
+                className="mt-6 inline-flex rounded-xl bg-[#748779] px-5 py-2.5 text-xs font-semibold text-white hover:bg-[#5E7063] transition shadow-xs cursor-pointer"
               >
                 Shop Now
               </Link>

@@ -425,11 +425,11 @@ export function ProductDetailsPage() {
           {product.sizes.length > 0 && (
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select Size</span>
+                <span className="text-xs font-bold text-[#667085] uppercase tracking-wider">Select Size</span>
                 <button
                   type="button"
                   onClick={() => setIsSizeGuideOpen(true)}
-                  className="text-xs font-bold text-black underline hover:text-gray-600 transition cursor-pointer"
+                  className="text-xs font-bold text-[#748779] underline hover:text-[#5E7063] transition cursor-pointer"
                 >
                   Size Guide
                 </button>
@@ -448,10 +448,10 @@ export function ProductDetailsPage() {
                       disabled={!available}
                       className={`min-w-12 h-11 rounded-xl border font-bold text-xs transition cursor-pointer ${
                         !available
-                          ? "border-gray-200 bg-gray-100 text-gray-300 cursor-not-allowed line-through"
+                          ? "border-[#E7E3DC] bg-[#F7F5F1] text-[#667085]/40 cursor-not-allowed line-through"
                           : selectedSize === size
-                          ? "border-black bg-black text-white"
-                          : "border-gray-200 bg-white text-gray-800 hover:border-black"
+                          ? "border-[#748779] bg-[#748779] text-white shadow-2xs"
+                          : "border-[#E7E3DC] bg-white text-[#20252B] hover:border-[#748779]"
                       }`}
                     >
                       {size}
@@ -465,7 +465,7 @@ export function ProductDetailsPage() {
           {/* Color Selector */}
           {product.colors.length > 0 && (
             <div className="space-y-2">
-              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Available Colour</span>
+              <span className="text-xs font-bold text-[#667085] uppercase tracking-wider block">Available Colour</span>
               <div className="flex flex-wrap gap-2">
                 {product.colors.map((color) => {
                   const available = isColorAvailable(color);
@@ -480,10 +480,10 @@ export function ProductDetailsPage() {
                       disabled={!available}
                       className={`px-4 h-10 rounded-xl border font-semibold text-xs transition cursor-pointer ${
                         !available
-                          ? "border-gray-200 bg-gray-100 text-gray-300 cursor-not-allowed line-through"
+                          ? "border-[#E7E3DC] bg-[#F7F5F1] text-[#667085]/40 cursor-not-allowed line-through"
                           : selectedColor === color
-                          ? "border-black bg-black text-white"
-                          : "border-gray-200 bg-white text-gray-800 hover:border-black"
+                          ? "border-[#748779] bg-[#748779] text-white shadow-2xs"
+                          : "border-[#E7E3DC] bg-white text-[#20252B] hover:border-[#748779]"
                       }`}
                     >
                       {color}
@@ -496,22 +496,22 @@ export function ProductDetailsPage() {
 
           {/* Quantity Selector */}
           <div className="space-y-2">
-            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Quantity</span>
-            <div className="inline-flex items-center rounded-xl border border-gray-200 bg-white p-1">
+            <span className="text-xs font-bold text-[#667085] uppercase tracking-wider block">Quantity</span>
+            <div className="inline-flex items-center rounded-xl border border-[#E7E3DC] bg-white p-1">
               <button
                 type="button"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                 disabled={quantity <= 1 || !canPurchaseSelectedVariant || isSubmitting}
-                className="w-9 h-9 flex items-center justify-center font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="w-9 h-9 flex items-center justify-center font-bold text-[#667085] hover:bg-[#F7F5F1] rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 −
               </button>
-              <span className="w-10 text-center font-bold text-sm text-gray-900">{quantity}</span>
+              <span className="w-10 text-center font-bold text-sm text-[#20252B]">{quantity}</span>
               <button
                 type="button"
                 onClick={() => setQuantity((q) => Math.min(selectedVariantAvailableQuantity, q + 1))}
                 disabled={quantity >= selectedVariantAvailableQuantity || !canPurchaseSelectedVariant || isSubmitting}
-                className="w-9 h-9 flex items-center justify-center font-bold text-gray-600 hover:bg-gray-100 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="w-9 h-9 flex items-center justify-center font-bold text-[#667085] hover:bg-[#F7F5F1] rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 +
               </button>
@@ -524,7 +524,7 @@ export function ProductDetailsPage() {
               type="button"
               onClick={handleAddToCart}
               disabled={!canPurchaseSelectedVariant || isSubmitting}
-              className="rounded-xl border border-black bg-white py-3.5 text-sm font-bold text-black hover:bg-gray-50 transition cursor-pointer disabled:border-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+              className="rounded-xl bg-[#748779] py-3.5 text-sm font-semibold text-white hover:bg-[#5E7063] transition shadow-xs cursor-pointer disabled:bg-[#E7E3DC] disabled:text-[#667085] disabled:cursor-not-allowed"
             >
               {isSubmitting ? "Adding..." : "Add to Cart"}
             </button>
@@ -533,7 +533,7 @@ export function ProductDetailsPage() {
               type="button"
               onClick={handleBuyNow}
               disabled={!canPurchaseSelectedVariant || isSubmitting}
-              className="rounded-xl bg-black py-3.5 text-sm font-bold text-white hover:bg-gray-800 transition cursor-pointer disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+              className="rounded-xl bg-[#20252B] py-3.5 text-sm font-semibold text-white hover:bg-[#333A42] transition shadow-xs cursor-pointer disabled:bg-[#E7E3DC] disabled:text-[#667085] disabled:cursor-not-allowed"
             >
               {isSubmitting ? "Processing..." : "Buy Now"}
             </button>
