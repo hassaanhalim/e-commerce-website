@@ -43,7 +43,7 @@ interface CartContextValue {
   backendCart: BackendCart | null;
   isLoadingCart: boolean;
   // Actions
-  addToCart: (item: AddCartItem) => Promise<void>;
+  addToCart: (item: AddCartItem, quantity?: number) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
   clearCart: () => Promise<void>;
@@ -174,13 +174,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // ── Actions ──────────────────────────────────────────────────────────────
   const addToCart = useCallback(
-    async (item: AddCartItem) => {
+    async (item: AddCartItem, quantity: number = 1) => {
+      const addQty = Math.max(1, quantity);
       if (isAuthenticated && item.variantId) {
         // Use backend
         try {
           const updatedCart = await cartApi.addItem(
             item.variantId,
-            1,
+            addQty,
             item.productId,
           );
           setBackendCart(updatedCart);
@@ -195,11 +196,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
           if (existing) {
             return current.map((ci) =>
               ci.id === itemId
-                ? { ...ci, quantity: Math.min(ci.quantity + 1, ci.stock) }
+                ? { ...ci, quantity: Math.min(ci.quantity + addQty, ci.stock) }
                 : ci,
             );
           }
-          return [...current, { ...item, id: itemId, quantity: 1 }];
+          return [...current, { ...item, id: itemId, quantity: addQty }];
         });
       }
     },

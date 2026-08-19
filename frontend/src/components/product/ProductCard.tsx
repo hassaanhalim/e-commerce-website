@@ -112,19 +112,34 @@ function ProductCard({ product }: ProductCardProps) {
             </span>
           </div>
 
-          <div className="mt-2 sm:mt-3 flex flex-wrap items-baseline gap-1.5 sm:gap-2">
-            {hasDiscount ? (
-              <>
+          <div className="mt-2.5 sm:mt-3 flex items-center justify-between flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-baseline gap-1.5 sm:gap-2">
+              {hasDiscount ? (
+                <>
+                  <span className="text-sm sm:text-base font-bold text-[#20252B]">
+                    {formatPrice(product.salePrice!)}
+                  </span>
+                  <span className="text-[11px] sm:text-xs font-medium text-[#667085] line-through">
+                    {formatPrice(product.price)}
+                  </span>
+                </>
+              ) : (
                 <span className="text-sm sm:text-base font-bold text-[#20252B]">
-                  {formatPrice(product.salePrice!)}
-                </span>
-                <span className="text-[11px] sm:text-xs font-medium text-[#667085] line-through">
                   {formatPrice(product.price)}
                 </span>
-              </>
+              )}
+            </div>
+
+            {/* Stock status badge */}
+            {product.inStock ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#E5EAE6] px-2 py-0.5 text-[10px] font-semibold text-[#748779]">
+                <span className="h-1 w-1 rounded-full bg-[#748779]"></span>
+                In Stock
+              </span>
             ) : (
-              <span className="text-sm sm:text-base font-bold text-[#20252B]">
-                {formatPrice(product.price)}
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                <span className="h-1 w-1 rounded-full bg-gray-400"></span>
+                Out of Stock
               </span>
             )}
           </div>

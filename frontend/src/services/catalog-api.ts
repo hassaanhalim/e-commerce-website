@@ -73,12 +73,18 @@ export interface ProductDetailResponse extends Product {
 }
 
 function getAvailableQuantity(item: any): number {
+  if (typeof item?.availableQuantity === "number") {
+    return Math.max(0, item.availableQuantity);
+  }
   const inventory = item?.inventory;
-  if (!inventory) return 0;
-
-  const quantityOnHand = Number(inventory.quantityOnHand ?? 0);
-  const reservedQuantity = Number(inventory.reservedQuantity ?? 0);
-  return Math.max(0, quantityOnHand - reservedQuantity);
+  if (inventory) {
+    const quantityOnHand = Number(inventory.quantityOnHand ?? 0);
+    const reservedQuantity = Number(inventory.reservedQuantity ?? 0);
+    return Math.max(0, quantityOnHand - reservedQuantity);
+  }
+  const qOnHand = Number(item?.quantityOnHand ?? 0);
+  const qReserved = Number(item?.reservedQuantity ?? 0);
+  return Math.max(0, qOnHand - qReserved);
 }
 
 export const catalogApi = {
