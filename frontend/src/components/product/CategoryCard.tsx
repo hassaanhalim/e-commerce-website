@@ -7,7 +7,7 @@ interface CategoryCardProps {
 
 function CategoryCard({ category }: CategoryCardProps) {
   return (
-    <article className="group relative min-h-84 overflow-hidden rounded-2xl bg-[#20252B] shadow-2xs border border-[#E7E3DC]/40">
+    <article className="group relative min-h-64 sm:min-h-72 md:min-h-84 overflow-hidden rounded-2xl bg-[#20252B] shadow-2xs border border-[#E7E3DC]/40">
       <img
         src={category.image}
         alt={category.name}
@@ -19,7 +19,7 @@ function CategoryCard({ category }: CategoryCardProps) {
 
       <Link
         to={category.link}
-        className="absolute inset-0 flex flex-col justify-end p-7 text-white"
+        className="absolute inset-0 flex flex-col justify-end p-5 sm:p-7 text-white"
         aria-label={`Shop ${category.name} collection`}
       >
         <h3 className="text-2xl font-bold tracking-tight text-white">{category.name}</h3>

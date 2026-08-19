@@ -86,7 +86,7 @@ function CartPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-10 sm:px-6">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
       <div className="flex items-end justify-between border-b border-[#E7E3DC] pb-6">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#748779]">Shopping cart</p>

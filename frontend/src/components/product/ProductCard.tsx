@@ -96,34 +96,34 @@ function ProductCard({ product }: ProductCardProps) {
           )}
         </div>
 
-        <div className="p-4">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-[#667085]">
+        <div className="p-3 sm:p-4">
+          <p className="text-[10px] sm:text-[11px] font-medium uppercase tracking-wider text-[#667085] truncate">
             {product.brand}
           </p>
 
-          <h2 className="mt-1 text-sm font-semibold leading-snug text-[#20252B] transition-colors group-hover:text-[#748779]">
+          <h2 className="mt-1 text-xs sm:text-sm font-semibold leading-snug text-[#20252B] transition-colors group-hover:text-[#748779] line-clamp-2">
             {product.name}
           </h2>
 
-          <div className="mt-2 flex items-center gap-1.5">
+          <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5">
             <StarRating rating={product.rating} />
-            <span className="text-xs font-medium text-[#667085]">
+            <span className="text-[11px] sm:text-xs font-medium text-[#667085]">
               ({product.reviewCount})
             </span>
           </div>
 
-          <div className="mt-3 flex items-baseline gap-2">
+          <div className="mt-2 sm:mt-3 flex flex-wrap items-baseline gap-1.5 sm:gap-2">
             {hasDiscount ? (
               <>
-                <span className="text-base font-bold text-[#20252B]">
+                <span className="text-sm sm:text-base font-bold text-[#20252B]">
                   {formatPrice(product.salePrice!)}
                 </span>
-                <span className="text-xs font-medium text-[#667085] line-through">
+                <span className="text-[11px] sm:text-xs font-medium text-[#667085] line-through">
                   {formatPrice(product.price)}
                 </span>
               </>
             ) : (
-              <span className="text-base font-bold text-[#20252B]">
+              <span className="text-sm sm:text-base font-bold text-[#20252B]">
                 {formatPrice(product.price)}
               </span>
             )}

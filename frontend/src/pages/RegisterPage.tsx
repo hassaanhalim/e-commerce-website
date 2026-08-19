@@ -63,8 +63,8 @@ function RegisterPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100vh-72px)] max-w-7xl items-center justify-center px-5 py-12 sm:px-6 bg-[#FBFAF7]">
-      <section className="w-full max-w-lg rounded-3xl border border-[#E7E3DC] bg-white p-7 shadow-2xs sm:p-9">
+    <main className="mx-auto flex min-h-[calc(100vh-72px)] max-w-7xl items-center justify-center px-4 py-8 sm:px-6 sm:py-12 bg-[#FBFAF7]">
+      <section className="w-full max-w-lg rounded-2xl sm:rounded-3xl border border-[#E7E3DC] bg-white p-5 shadow-2xs sm:p-9">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#748779]">
           Customer account
         </p>

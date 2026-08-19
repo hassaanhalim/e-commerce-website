@@ -583,5 +583,109 @@ model AuditLog {
   @@index([createdAt])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 9 – Homepage Settings & CMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model HomepageSettings {
+  id                    String   @id @default("default")
+
+  // Announcement Bar
+  announcementEnabled   Boolean  @default(true)
+  announcementText      String   @default("Free delivery on orders above PKR 5,000")
+  announcementLinkText  String?  @default("Shop Now")
+  announcementLinkUrl   String?  @default("/shop")
+
+  // Hero Section
+  heroEnabled           Boolean  @default(true)
+  heroEyebrow           String   @default("New Collection 2026")
+  heroHeading           String   @default("Step into comfort and confidence.")
+  heroDescription       String   @default("Discover footwear designed for your everyday movement, professional style and active lifestyle.")
+  heroPrimaryLabel      String   @default("Shop All Shoes")
+  heroPrimaryUrl        String   @default("/shop")
+  heroSecondaryLabel    String?  @default("Explore Sports")
+  heroSecondaryUrl      String?  @default("/shop?category=Sports")
+  heroImageUrl          String   @default("https://images.unsplash.com/photo-1556906781-9a412961c28c?q=80&w=1200&auto=format&fit=crop")
+
+  // Categories Section
+  categoriesEnabled     Boolean  @default(true)
+  categoriesEyebrow     String   @default("Shop by category")
+  categoriesHeading     String   @default("Find your perfect pair")
+  categoriesDescription String?  @default("Browse our footwear categories.")
+  categoriesCtaLabel    String   @default("View all products")
+  categoriesCtaUrl      String   @default("/shop")
+
+  // New Arrivals / Featured Products Section
+  arrivalsEnabled       Boolean  @default(true)
+  arrivalsEyebrow       String   @default("Latest footwear")
+  arrivalsHeading       String   @default("New arrivals")
+  arrivalsDescription   String?  @default("Explore our newest styles and designs.")
+  arrivalsCtaLabel      String   @default("Shop new arrivals")
+  arrivalsCtaUrl        String   @default("/shop")
+  arrivalsLimit         Int      @default(4)
+
+  // Promotional / Sale Banner
+  promoEnabled          Boolean  @default(true)
+  promoEyebrow          String   @default("Selected styles")
+  promoHeading          String   @default("Save on our best sellers")
+  promoDescription      String   @default("Shop selected everyday, formal and sports footwear at reduced prices while stock lasts.")
+  promoCtaLabel         String   @default("Shop Sale Collection")
+  promoCtaUrl           String   @default("/shop")
+  promoImageUrl         String   @default("https://images.unsplash.com/photo-1542291026-7eec264c27ff?q=80&w=1200&auto=format&fit=crop")
+
+  // Newsletter Section
+  newsletterEnabled     Boolean  @default(true)
+  newsletterEyebrow     String   @default("Stay updated")
+  newsletterHeading     String   @default("Get new arrivals and offers")
+  newsletterDescription String   @default("Subscribe to receive information about new products, seasonal collections and store promotions.")
+  newsletterPlaceholder String   @default("Enter your email address")
+  newsletterButtonLabel String   @default("Subscribe")
+
+  // Footer Content
+  footerStoreName       String   @default("Shoe Store")
+  footerDescription     String   @default("Premium footwear for everyday movement, performance sports and formal elegance.")
+  footerCopyright       String   @default("© 2026 Shoe Store. All rights reserved.")
+  footerSupportEmail    String?  @default("support@shoestore.pk")
+  footerSupportPhone    String?  @default("+92 300 1234567")
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  stats                 HomepageStat[]
+  benefits              HomepageBenefit[]
+}
+
+model HomepageStat {
+  id         String           @id @default(cuid())
+  settingsId String           @default("default")
+  value      String
+  label      String
+  enabled    Boolean          @default(true)
+  sortOrder  Int              @default(0)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  settings   HomepageSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@index([settingsId, sortOrder])
+}
+
+model HomepageBenefit {
+  id          String           @id @default(cuid())
+  settingsId  String           @default("default")
+  title       String
+  description String
+  iconKey     String           @default("truck")
+  enabled     Boolean          @default(true)
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  settings    HomepageSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+
+  @@index([settingsId, sortOrder])
+}
+
+
 
 

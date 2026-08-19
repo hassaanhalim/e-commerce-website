@@ -47,6 +47,7 @@ import ReturnDetailPage from "./pages/admin/ReturnDetailPage";
 import ReportsPage from "./pages/admin/ReportsPage";
 import StaffPage from "./pages/admin/StaffPage";
 import AuditLogPage from "./pages/admin/AuditLogPage";
+import SettingsPage from "./pages/admin/SettingsPage";
 
 function App() {
   const location = useLocation();
@@ -122,6 +123,7 @@ function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="staff" element={<StaffPage />} />
             <Route path="audit-log" element={<AuditLogPage />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />

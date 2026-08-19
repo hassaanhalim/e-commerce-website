@@ -12,7 +12,12 @@ interface SidebarGroup {
   items: SidebarItem[];
 }
 
-export function AdminSidebar() {
+interface AdminSidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function AdminSidebar({ isOpen = false, onClose }: AdminSidebarProps) {
   const activeClass = "flex items-center gap-3 rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition";
   const inactiveClass = "flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-gray-100 hover:text-black";
 
@@ -147,45 +152,88 @@ export function AdminSidebar() {
             </svg>
           ),
         },
+        {
+          label: "Settings",
+          path: "/admin/settings",
+          icon: (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          ),
+        },
       ],
     },
   ];
 
   return (
-    <aside className="w-64 border-r border-gray-200 bg-white p-5 flex flex-col h-full overflow-y-auto shrink-0 select-none">
-      {/* Branding Header */}
-      <div className="mb-8 px-4 flex items-center justify-between">
-        <Link to="/" className="text-xl font-bold text-black hover:opacity-80 transition">
-          Admin Panel
-        </Link>
-      </div>
+    <>
+      {/* Mobile Dark Backdrop Overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs transition-opacity lg:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
 
-      {/* Navigation Groups */}
-      <nav className="flex-1 space-y-6">
-        {navigation.map((group, idx) => (
-          <div key={idx} className="space-y-1.5">
-            {group.groupLabel && (
-              <h3 className="px-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                {group.groupLabel}
-              </h3>
-            )}
-            <div className="space-y-1">
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === "/admin"}
-                  className={({ isActive }) => (isActive ? activeClass : inactiveClass)}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </NavLink>
-              ))}
+      {/* Sidebar Drawer */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 max-w-[85vw] flex-col border-r border-gray-200 bg-white p-5 shadow-lg select-none transition-transform duration-200 ease-in-out lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shadow-none lg:translate-x-0 ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {/* Branding Header */}
+        <div className="mb-6 px-2 flex items-center justify-between">
+          <Link
+            to="/"
+            onClick={onClose}
+            className="text-xl font-bold text-black hover:opacity-80 transition"
+          >
+            Admin Panel
+          </Link>
+
+          {/* Close X Button for Mobile */}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close admin navigation"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-gray-500 hover:bg-gray-100 hover:text-black transition lg:hidden cursor-pointer"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Navigation Groups */}
+        <nav className="flex-1 space-y-6 overflow-y-auto">
+          {navigation.map((group, idx) => (
+            <div key={idx} className="space-y-1.5">
+              {group.groupLabel && (
+                <h3 className="px-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                  {group.groupLabel}
+                </h3>
+              )}
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    end={item.path === "/admin"}
+                    onClick={onClose}
+                    className={({ isActive }) => (isActive ? activeClass : inactiveClass)}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </nav>
-    </aside>
+          ))}
+        </nav>
+      </aside>
+    </>
   );
 }
 

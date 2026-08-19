@@ -18,8 +18,8 @@ export function AccountLayout() {
     }`;
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-[#FBFAF7] py-10">
-      <div className="mx-auto max-w-7xl px-5 sm:px-6">
+    <div className="min-h-[calc(100vh-64px)] bg-[#FBFAF7] py-6 sm:py-10">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex flex-col gap-8 md:flex-row">
           {/* Account Sidebar Navigation */}
           <aside className="w-full shrink-0 md:w-64">

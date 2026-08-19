@@ -87,7 +87,7 @@ function FilterDropdown({
 
 export function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [_isMobileFiltersOpen, _setIsMobileFiltersOpen] = useState(false);
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<DropdownId>(null);
   const [gridCols, setGridCols] = useState<GridCols>(3);
   const toolbarRef = useRef<HTMLDivElement>(null);
@@ -323,12 +323,12 @@ export function ShopPage() {
     SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? "Newest Arrivals";
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-8 sm:px-6">
-      <div className="mb-8">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mb-6 sm:mb-8">
         <p className="text-xs font-bold uppercase tracking-[0.15em] text-[#748779]">
           Our Collection
         </p>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-[#20252B] sm:text-4xl">
+        <h1 className="mt-1 text-2xl font-bold tracking-tight text-[#20252B] sm:text-3xl md:text-4xl">
           Shop Shoes
         </h1>
         <p className="mt-1.5 max-w-2xl text-sm text-[#667085]">
@@ -557,8 +557,135 @@ export function ShopPage() {
         </div>
       </div>
 
+      {/* ── Mobile filter / sort controls ── */}
+      <div className="mb-4 lg:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#E7E3DC] bg-white px-4 py-2.5 text-sm font-semibold text-[#20252B] transition hover:border-[#748779] cursor-pointer"
+          >
+            <svg className="h-4 w-4 text-[#667085]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Filters{activeChips.length > 0 ? ` (${activeChips.length})` : ""}
+          </button>
+
+          <div className="relative flex-1">
+            <button
+              type="button"
+              onClick={() => toggleDropdown(openDropdown === "sort" ? null : "sort")}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#E7E3DC] bg-white px-4 py-2.5 text-sm font-semibold text-[#20252B] transition hover:border-[#748779] cursor-pointer"
+            >
+              Sort
+              <ChevronDownIcon
+                className={`h-3.5 w-3.5 text-[#667085] transition-transform ${
+                  openDropdown === "sort" ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {openDropdown === "sort" && (
+              <div className="absolute right-0 top-full z-50 mt-2 w-56 max-h-72 overflow-y-auto rounded-xl border border-[#E7E3DC] bg-white p-3 shadow-lg">
+                {SORT_OPTIONS.map((opt) => (
+                  <OptionButton
+                    key={opt.value}
+                    label={opt.label}
+                    isSelected={sortBy === opt.value}
+                    onClick={() => {
+                      updateFilter("sort", opt.value);
+                      setOpenDropdown(null);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile filter panel */}
+        {isMobileFiltersOpen && (
+          <div className="mt-3 space-y-3 rounded-2xl border border-[#E7E3DC] bg-white p-4 shadow-sm">
+            {/* Category */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-[#667085]">Category</label>
+              <select
+                value={selectedCategory}
+                onChange={(e) => updateFilter("category", e.target.value || null)}
+                className="mt-1 w-full rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] px-3 py-2.5 text-sm font-medium text-[#20252B] outline-none focus:border-[#748779]"
+              >
+                <option value="">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.slug}>{cat.name} ({cat.productCount})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Gender */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-[#667085]">Gender</label>
+              <select
+                value={selectedGender}
+                onChange={(e) => updateFilter("gender", e.target.value || null)}
+                className="mt-1 w-full rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] px-3 py-2.5 text-sm font-medium text-[#20252B] outline-none focus:border-[#748779]"
+              >
+                <option value="">All Genders</option>
+                {GENDERS.map((g) => (
+                  <option key={g} value={g}>{g}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Brand */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-[#667085]">Brand</label>
+              <select
+                value={selectedBrand}
+                onChange={(e) => updateFilter("brand", e.target.value || null)}
+                className="mt-1 w-full rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] px-3 py-2.5 text-sm font-medium text-[#20252B] outline-none focus:border-[#748779]"
+              >
+                <option value="">All Brands</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.slug}>{b.name} ({b.productCount})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Price Range */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-[#667085]">Price Range (Rs.)</label>
+              <div className="mt-1 grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  placeholder="Min"
+                  value={minPriceParam}
+                  onChange={(e) => updateFilter("minPrice", e.target.value)}
+                  className="w-full rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] px-3 py-2.5 text-sm text-[#20252B] outline-none focus:border-[#748779]"
+                />
+                <input
+                  type="number"
+                  placeholder="Max"
+                  value={maxPriceParam}
+                  onChange={(e) => updateFilter("maxPrice", e.target.value)}
+                  className="w-full rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] px-3 py-2.5 text-sm text-[#20252B] outline-none focus:border-[#748779]"
+                />
+              </div>
+            </div>
+
+            {activeChips.length > 0 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="w-full rounded-xl border border-[#E7E3DC] py-2.5 text-xs font-semibold text-[#B9785D] transition hover:bg-[#FEF2F2] cursor-pointer"
+              >
+                Clear All Filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       {activeChips.length > 0 && (
-        <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-[#E7E3DC] pb-4">
+        <div className="mb-4 sm:mb-6 flex flex-wrap items-center gap-2 border-b border-[#E7E3DC] pb-3 sm:pb-4">
           {activeChips.map((chip) => (
             <Chip key={chip.label} label={chip.label} onRemove={chip.onRemove} />
           ))}
@@ -573,7 +700,7 @@ export function ShopPage() {
         </div>
       )}
 
-      <p className="mb-6 text-xs font-medium text-[#667085]">
+      <p className="mb-4 sm:mb-6 text-xs font-medium text-[#667085]">
         Showing{" "}
         <span className="font-bold text-[#20252B]">{paginationMeta.total}</span>{" "}
         {paginationMeta.total === 1 ? "product" : "products"}
@@ -611,10 +738,10 @@ export function ShopPage() {
       ) : (
         <>
           <section
-            className={`grid gap-6 ${
+            className={`grid gap-3 min-[375px]:gap-4 sm:gap-5 lg:gap-6 ${
               gridCols === 4
-                ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                ? "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3"
             }`}
           >
             {productsList.map((product) => (
@@ -623,11 +750,11 @@ export function ShopPage() {
           </section>
 
           {paginationMeta.totalPages > 1 && (
-            <div className="mt-12 flex items-center justify-center gap-2">
+            <div className="mt-8 sm:mt-12 flex items-center justify-center gap-2">
               <button
                 disabled={paginationMeta.page <= 1}
                 onClick={() => setPage(paginationMeta.page - 1)}
-                className="rounded-xl border border-[#E7E3DC] px-4 py-2 text-xs font-bold text-[#20252B] disabled:opacity-40 hover:bg-[#F7F5F1] transition cursor-pointer"
+                className="rounded-xl border border-[#E7E3DC] px-3 py-2.5 sm:px-4 sm:py-2 text-xs font-bold text-[#20252B] disabled:opacity-40 hover:bg-[#F7F5F1] transition cursor-pointer"
               >
                 Previous
               </button>
@@ -637,7 +764,7 @@ export function ShopPage() {
               <button
                 disabled={paginationMeta.page >= paginationMeta.totalPages}
                 onClick={() => setPage(paginationMeta.page + 1)}
-                className="rounded-xl border border-[#E7E3DC] px-4 py-2 text-xs font-bold text-[#20252B] disabled:opacity-40 hover:bg-[#F7F5F1] transition cursor-pointer"
+                className="rounded-xl border border-[#E7E3DC] px-3 py-2.5 sm:px-4 sm:py-2 text-xs font-bold text-[#20252B] disabled:opacity-40 hover:bg-[#F7F5F1] transition cursor-pointer"
               >
                 Next
               </button>

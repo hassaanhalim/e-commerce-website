@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from "react-router";
 import { useAuth } from "../../context/AuthContext";
 import { useCart } from "../../context/CartContext";
 import { useWishlist } from "../../context/WishlistContext";
+import { homepageApi } from "../../services/homepage-api";
 
 /* ─────────────────────────────────────────────
    Inline SVG icons
@@ -117,12 +118,54 @@ function Navbar() {
       isActive ? "text-[#748779]" : "text-[#667085] hover:text-[#20252B]"
     }`;
 
+  const [announcement, setAnnouncement] = useState<{
+    enabled: boolean;
+    text: string;
+    linkText?: string | null;
+    linkUrl?: string | null;
+  }>(() => {
+    const cached = homepageApi.getCachedSettings();
+    return {
+      enabled: cached ? cached.announcementEnabled : true,
+      text: cached ? cached.announcementText : "Free delivery on orders above PKR 5,000",
+      linkText: cached ? cached.announcementLinkText : "Shop Now",
+      linkUrl: cached ? cached.announcementLinkUrl : "/shop",
+    };
+  });
+
+  useEffect(() => {
+    homepageApi
+      .getPublicSettings()
+      .then((data) => {
+        if (data) {
+          setAnnouncement({
+            enabled: data.announcementEnabled,
+            text: data.announcementText,
+            linkText: data.announcementLinkText,
+            linkUrl: data.announcementLinkUrl,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const wishlistPath = user?.role === "CUSTOMER" ? "/account/wishlist" : "/wishlist";
 
   return (
     <>
+      {announcement.enabled && announcement.text && (
+        <div className="bg-[#20252B] py-2 px-4 text-center text-xs font-semibold text-white flex items-center justify-center gap-2">
+          <span>{announcement.text}</span>
+          {announcement.linkText && announcement.linkUrl && (
+            <Link to={announcement.linkUrl} className="underline hover:text-[#E5EAE6] transition">
+              {announcement.linkText} →
+            </Link>
+          )}
+        </div>
+      )}
+
       <header className="sticky top-0 z-50 border-b border-[#E7E3DC] bg-[#FBFAF7]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-5 px-5 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:gap-5 sm:px-6">
 
           {/* Logo */}
           <Link to="/" className="shrink-0 text-xl font-bold tracking-tight text-[#20252B] flex items-center gap-1.5">

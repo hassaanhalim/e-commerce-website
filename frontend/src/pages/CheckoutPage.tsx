@@ -240,7 +240,7 @@ export function CheckoutPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-10 sm:px-6 space-y-8">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 space-y-6 sm:space-y-8">
       {/* Page Header */}
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-gray-400">Secure Checkout</p>

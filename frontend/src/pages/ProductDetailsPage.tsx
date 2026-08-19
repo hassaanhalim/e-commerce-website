@@ -310,7 +310,7 @@ export function ProductDetailsPage() {
   const reviewCount = ratingSummary?.reviewCount ?? product.reviewCount ?? 0;
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-10 sm:px-6 space-y-12">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 space-y-8 sm:space-y-12">
       {/* Breadcrumb */}
       <nav className="text-xs font-semibold text-gray-500 flex items-center gap-2">
         <Link to="/" className="hover:text-black transition">Home</Link>
@@ -321,7 +321,7 @@ export function ProductDetailsPage() {
       </nav>
 
       {/* Main Grid */}
-      <section className="grid gap-12 lg:grid-cols-2">
+      <section className="grid gap-6 lg:gap-12 lg:grid-cols-2">
         {/* Left Column: Image Gallery */}
         <div className="space-y-4">
           <div
@@ -386,7 +386,7 @@ export function ProductDetailsPage() {
               </button>
             </div>
 
-            <h1 className="mt-1 text-3xl font-extrabold text-gray-950">{product.name}</h1>
+            <h1 className="mt-1 text-2xl font-extrabold text-gray-950 sm:text-3xl">{product.name}</h1>
 
             {/* Rating Stars Header */}
             <div className="mt-2 flex items-center gap-2">
@@ -552,22 +552,22 @@ export function ProductDetailsPage() {
       </section>
 
       {/* Customer Reviews Section */}
-      <section className="border-t border-gray-200 pt-12 space-y-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <section className="border-t border-gray-200 pt-8 sm:pt-12 space-y-6 sm:space-y-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-extrabold text-gray-950">Customer Reviews</h2>
+            <h2 className="text-xl font-extrabold text-gray-950 sm:text-2xl">Customer Reviews</h2>
             <p className="text-xs font-semibold text-gray-500 mt-0.5">
               Real feedback from verified purchasers.
             </p>
           </div>
 
           {/* Star Rating Filter */}
-          <div className="flex items-center gap-2 text-xs font-semibold">
-            <span className="text-gray-400 uppercase font-bold">Filter:</span>
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs font-semibold">
+            <span className="text-gray-400 uppercase font-bold mr-1">Filter:</span>
             <button
               type="button"
               onClick={() => setSelectedRatingFilter(undefined)}
-              className={`rounded-lg px-2.5 py-1 transition cursor-pointer ${
+              className={`rounded-lg px-2.5 py-1.5 transition cursor-pointer ${
                 selectedRatingFilter === undefined ? "bg-black text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -578,7 +578,7 @@ export function ProductDetailsPage() {
                 key={star}
                 type="button"
                 onClick={() => setSelectedRatingFilter(star)}
-                className={`rounded-lg px-2.5 py-1 transition cursor-pointer ${
+                className={`rounded-lg px-2.5 py-1.5 transition cursor-pointer ${
                   selectedRatingFilter === star ? "bg-black text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
@@ -767,9 +767,9 @@ export function ProductDetailsPage() {
 
       {/* Related Products Grid */}
       {relatedProducts.length > 0 && (
-        <section className="border-t border-gray-200 pt-12 space-y-6">
-          <h2 className="text-2xl font-bold text-gray-950">You Might Also Like</h2>
-          <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-4">
+        <section className="border-t border-gray-200 pt-8 sm:pt-12 space-y-4 sm:space-y-6">
+          <h2 className="text-xl font-bold text-gray-950 sm:text-2xl">You Might Also Like</h2>
+          <div className="grid gap-3 min-[375px]:grid-cols-2 min-[375px]:gap-4 sm:gap-5 md:grid-cols-4">
             {relatedProducts.map((relProd) => (
               <ProductCard key={relProd.id} product={relProd} />
             ))}

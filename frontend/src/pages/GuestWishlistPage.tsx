@@ -94,7 +94,7 @@ export function GuestWishlistPage() {
   };
 
   return (
-    <main className="mx-auto max-w-7xl px-5 py-12 sm:px-6 min-h-[calc(100vh-72px)] space-y-8">
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 min-h-[calc(100vh-72px)] space-y-6 sm:space-y-8">
       {/* Banner Reminder for Logged-Out Guests */}
       {!authLoading && !user && likedProducts.length > 0 && (
         <div className="flex flex-col gap-4 rounded-2xl bg-amber-50 border border-amber-200 p-6 sm:flex-row sm:items-center sm:justify-between shadow-xs">
@@ -123,7 +123,7 @@ export function GuestWishlistPage() {
 
       {/* Title */}
       <div>
-        <h1 className="text-3xl font-bold text-[#20252B] tracking-tight">Shopping Wishlist</h1>
+        <h1 className="text-2xl font-bold text-[#20252B] tracking-tight sm:text-3xl">Shopping Wishlist</h1>
         <p className="mt-1 text-xs font-bold text-[#748779] uppercase tracking-wider">
           Review saved products and size options.
         </p>
@@ -136,7 +136,7 @@ export function GuestWishlistPage() {
           <p className="mt-3 text-xs font-semibold text-[#667085]">Loading wishlist products...</p>
         </div>
       ) : (
-        <section className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        <section className="grid gap-3 min-[375px]:grid-cols-2 min-[375px]:gap-4 sm:gap-6 lg:grid-cols-4">
           {likedProducts.length === 0 ? (
             <div className="col-span-full rounded-2xl border border-gray-200 bg-white p-16 text-center shadow-xs">
               <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
