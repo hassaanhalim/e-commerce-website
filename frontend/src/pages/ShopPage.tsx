@@ -91,6 +91,7 @@ export function ShopPage() {
   const [openDropdown, setOpenDropdown] = useState<DropdownId>(null);
   const [gridCols, setGridCols] = useState<GridCols>(3);
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const mobileToolbarRef = useRef<HTMLDivElement>(null);
 
   const [categories, setCategories] = useState<PublicCategory[]>([]);
   const [brands, setBrands] = useState<PublicBrand[]>([]);
@@ -106,11 +107,13 @@ export function ShopPage() {
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        openDropdown &&
-        toolbarRef.current &&
-        !toolbarRef.current.contains(e.target as Node)
-      ) {
+      if (!openDropdown) return;
+
+      const target = e.target as Node;
+      const insideDesktop = toolbarRef.current?.contains(target);
+      const insideMobile = mobileToolbarRef.current?.contains(target);
+
+      if (!insideDesktop && !insideMobile) {
         setOpenDropdown(null);
       }
     }
@@ -558,7 +561,7 @@ export function ShopPage() {
       </div>
 
       {/* ── Mobile filter / sort controls ── */}
-      <div className="mb-4 lg:hidden">
+      <div ref={mobileToolbarRef} className="mb-4 lg:hidden">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -575,11 +578,16 @@ export function ShopPage() {
             <button
               type="button"
               onClick={() => toggleDropdown(openDropdown === "sort" ? null : "sort")}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#E7E3DC] bg-white px-4 py-2.5 text-sm font-semibold text-[#20252B] transition hover:border-[#748779] cursor-pointer"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-[#E7E3DC] bg-white px-3 py-2.5 text-sm font-semibold text-[#20252B] transition hover:border-[#748779] cursor-pointer"
             >
-              Sort
+              <span className="truncate">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#667085] mr-1">
+                  Sort:
+                </span>
+                {sortLabel}
+              </span>
               <ChevronDownIcon
-                className={`h-3.5 w-3.5 text-[#667085] transition-transform ${
+                className={`h-3.5 w-3.5 shrink-0 text-[#667085] transition-transform ${
                   openDropdown === "sort" ? "rotate-180" : ""
                 }`}
               />
@@ -605,6 +613,22 @@ export function ShopPage() {
         {/* Mobile filter panel */}
         {isMobileFiltersOpen && (
           <div className="mt-3 space-y-3 rounded-2xl border border-[#E7E3DC] bg-white p-4 shadow-sm">
+            {/* Sort */}
+            <div>
+              <label className="text-xs font-bold uppercase tracking-wider text-[#667085]">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => updateFilter("sort", e.target.value)}
+                className="mt-1 w-full rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] px-3 py-2.5 text-sm font-medium text-[#20252B] outline-none focus:border-[#748779]"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Category */}
             <div>
               <label className="text-xs font-bold uppercase tracking-wider text-[#667085]">Category</label>
