@@ -31,6 +31,7 @@ function RegisterPage() {
   // Post-registration state
   const [isRegistered, setIsRegistered] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
+  const [verificationEmailSent, setVerificationEmailSent] = useState(true);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
   const [resendMessage, setResendMessage] = useState("");
 
@@ -70,6 +71,7 @@ function RegisterPage() {
       } satisfies RegisterUserInput);
 
       setRegisteredEmail(response.email || email.trim());
+      setVerificationEmailSent(response.verificationEmailSent !== false);
       setIsRegistered(true);
     } catch (registerError) {
       setError(registerError instanceof Error ? registerError.message : "Unable to create the account.");
@@ -105,9 +107,11 @@ function RegisterPage() {
     if (!registeredEmail) return;
 
     setResendStatus("sending");
+    setError("");
     try {
       const result = await resendVerification(registeredEmail);
       setResendStatus("sent");
+      setVerificationEmailSent(true);
       setResendMessage(result.message || "A new verification link has been sent to your email.");
     } catch (err: any) {
       setResendStatus("idle");
@@ -140,14 +144,24 @@ function RegisterPage() {
             Check your email
           </h1>
 
-          <p className="mt-3 text-sm leading-relaxed text-[#667085]">
-            We sent a verification link to{" "}
-            <span className="font-semibold text-[#20252B]">{registeredEmail}</span>.
-          </p>
-
-          <p className="mt-2 text-xs leading-relaxed text-[#8F9BB3]">
-            Please click the link inside the email within 60 minutes to activate your account.
-          </p>
+          {verificationEmailSent ? (
+            <>
+              <p className="mt-3 text-sm leading-relaxed text-[#667085]">
+                We sent a verification link to{" "}
+                <span className="font-semibold text-[#20252B]">{registeredEmail}</span>.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-[#8F9BB3]">
+                Please click the link inside the email within 60 minutes to activate your account.
+              </p>
+            </>
+          ) : (
+            <div className="mt-4 rounded-xl bg-[#FFFBEB] border border-[#F59E0B]/30 p-3.5 text-left text-xs text-[#B45309]">
+              <p className="font-semibold">Email Delivery Notice</p>
+              <p className="mt-1">
+                Your account was created, but we couldn't send the verification email. Please click <strong>Resend verification email</strong> below.
+              </p>
+            </div>
+          )}
 
           {resendStatus === "sent" && (
             <p className="mt-4 rounded-xl bg-[#E5EAE6] border border-[#748779]/30 p-3 text-xs font-medium text-[#748779]">

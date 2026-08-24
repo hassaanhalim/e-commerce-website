@@ -1,5 +1,6 @@
 import { createHmac, randomBytes } from "crypto";
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   Injectable,
@@ -28,6 +29,8 @@ type LoginInput = {
 };
 
 export type RegisterResult = {
+  accountCreated: boolean;
+  verificationEmailSent: boolean;
   message: string;
   email: string;
   requiresVerification: boolean;
@@ -201,11 +204,15 @@ export class AuthService {
 
     await this.usersService.createVerificationToken(user.id, tokenHash, expiresAt);
 
-    // Send verification email safely (does not fail account creation if SMTP has issues)
-    await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
+    // Attempt delivery safely (never roll back the created user if email delivery fails)
+    const emailSent = await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
 
     return {
-      message: "Registration successful. We sent a verification link to your email.",
+      accountCreated: true,
+      verificationEmailSent: emailSent,
+      message: emailSent
+        ? "Registration successful. We sent a verification link to your email."
+        : "Your account was created, but we couldn't send the verification email. Please use Resend verification email.",
       email: user.email,
       requiresVerification: true,
     };
@@ -271,7 +278,13 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
     await this.usersService.createVerificationToken(user.id, tokenHash, expiresAt);
-    await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
+    const emailSent = await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
+
+    if (!emailSent) {
+      throw new BadGatewayException(
+        "We couldn't send the verification email. Please try again in a few moments.",
+      );
+    }
 
     return {
       message: "A new verification link has been sent to your email address.",

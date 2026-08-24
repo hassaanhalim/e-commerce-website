@@ -122,6 +122,8 @@ export interface RegisterUserInput {
 }
 
 export interface RegisterResponse {
+  accountCreated: boolean;
+  verificationEmailSent: boolean;
   message: string;
   email: string;
   requiresVerification: boolean;

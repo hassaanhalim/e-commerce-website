@@ -1,44 +1,34 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import * as nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private transporter: nodemailer.Transporter | null = null;
+  private readonly resend: Resend | null = null;
   private readonly fromEmail: string;
   private readonly frontendUrl: string;
   private readonly isConfigured: boolean;
 
   constructor(private readonly configService: ConfigService) {
-    const host = this.configService.get<string>("SMTP_HOST") || "smtp.gmail.com";
-    const port = Number(this.configService.get<number>("SMTP_PORT")) || 587;
-    const user = this.configService.get<string>("SMTP_USER")?.trim();
-    const pass = this.configService.get<string>("SMTP_APP_PASSWORD")?.trim();
+    const apiKey = this.configService.get<string>("RESEND_API_KEY")?.trim();
     const customFrom = this.configService.get<string>("EMAIL_FROM")?.trim();
 
     this.frontendUrl = (
       this.configService.get<string>("FRONTEND_URL") || "http://localhost:5173"
     ).replace(/\/+$/, "");
 
-    this.fromEmail = customFrom || (user ? `Shoe Store <${user}>` : "Shoe Store <noreply@shoestore.com>");
+    // Resend allows "onboarding@resend.dev" by default, or verified custom domains
+    this.fromEmail = customFrom || "Shoe Store <onboarding@resend.dev>";
 
-    if (user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure: port === 465,
-        auth: {
-          user,
-          pass,
-        },
-      });
+    if (apiKey) {
+      this.resend = new Resend(apiKey);
       this.isConfigured = true;
-      this.logger.log(`Mail service initialized with host ${host}:${port}`);
+      this.logger.log("MailService initialized with Resend HTTPS API transport.");
     } else {
       this.isConfigured = false;
       this.logger.warn(
-        "SMTP credentials (SMTP_USER / SMTP_APP_PASSWORD) not provided. Email delivery will be simulated in development.",
+        "RESEND_API_KEY not configured. Email delivery will be simulated in server logs.",
       );
     }
   }
@@ -200,26 +190,43 @@ Thank you for choosing Shoe Store!
     html: string,
     text: string,
   ): Promise<boolean> {
-    if (!this.isConfigured || !this.transporter) {
+    if (!this.isConfigured || !this.resend) {
       this.logger.log(
-        `[SIMULATED EMAIL] To: ${toEmail} | Subject: "${subject}" (SMTP credentials not configured)`,
+        `[SIMULATED EMAIL] To: ${toEmail} | Subject: "${subject}" (RESEND_API_KEY not configured)`,
       );
       return true;
     }
 
     try {
-      await this.transporter.sendMail({
+      // 10-second timeout promise race to prevent hanging indefinitely
+      const sendPromise = this.resend.emails.send({
         from: this.fromEmail,
-        to: toEmail,
+        to: [toEmail],
         subject,
-        text,
         html,
+        text,
       });
-      this.logger.log(`Email successfully sent to ${toEmail} with subject "${subject}"`);
+
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((_, reject) =>
+        setTimeout(() => reject(new Error("Email delivery request timed out (10s)")), 10000),
+      );
+
+      const response = (await Promise.race([sendPromise, timeoutPromise])) as any;
+
+      if (response?.error) {
+        this.logger.error(
+          `Resend API error delivering to ${toEmail}: ${response.error?.message || "Unknown error"}`,
+        );
+        return false;
+      }
+
+      this.logger.log(
+        `Email successfully delivered via Resend to ${toEmail} (ID: ${response?.data?.id || "ok"})`,
+      );
       return true;
     } catch (error: any) {
       this.logger.error(
-        `Failed to send email to ${toEmail}: ${error?.message || "Unknown SMTP error"}`,
+        `Failed to deliver email via Resend to ${toEmail}: ${error?.message || "Unknown error"}`,
       );
       return false;
     }
