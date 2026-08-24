@@ -119,6 +119,8 @@ model Product {
   @@index([isActive])
   @@index([isFeatured])
   @@index([gender])
+  @@index([isActive, createdAt])
+  @@index([isActive, isFeatured])
 }
 
 model ProductVariant {
@@ -141,6 +143,7 @@ model ProductVariant {
   @@unique([productId, size, color])
   @@index([productId])
   @@index([isActive])
+  @@index([productId, isActive])
 }
 
 model Inventory {
@@ -409,6 +412,7 @@ model Order {
   @@index([paymentStatus])
   @@index([createdAt])
   @@index([checkoutSessionId])
+  @@index([userId, status])
 }
 
 model OrderItem {
@@ -433,6 +437,7 @@ model OrderItem {
   returnRequests      ReturnRequest[]
 
   @@index([orderId])
+  @@index([productId])
 }
 
 

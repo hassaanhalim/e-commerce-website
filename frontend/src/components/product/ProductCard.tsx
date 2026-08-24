@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import type { Product } from "../../types/product";
 import { formatPrice } from "../../utils/formatPrice";
 import { useWishlist } from "../../context/WishlistContext";
+import { catalogApi } from "../../services/catalog-api";
 
 interface ProductCardProps {
   product: Product;
@@ -44,13 +45,25 @@ function ProductCard({ product }: ProductCardProps) {
     toggleWishlist(product.id);
   }
 
+  function handlePrefetch() {
+    if (product.slug) {
+      catalogApi.prefetchProduct(product.slug);
+    }
+  }
+
   return (
-    <article className="group overflow-hidden rounded-2xl border border-[#E7E3DC] bg-white shadow-2xs transition duration-300 hover:border-[#D8C7B2] hover:shadow-sm">
+    <article
+      onMouseEnter={handlePrefetch}
+      onFocus={handlePrefetch}
+      className="group overflow-hidden rounded-2xl border border-[#E7E3DC] bg-white shadow-2xs transition duration-300 hover:border-[#D8C7B2] hover:shadow-sm"
+    >
       <Link to={`/products/${product.slug}`} className="block">
         <div className="relative overflow-hidden bg-[#F7F5F1]">
           <img
             src={product.image}
             alt={product.name}
+            loading="lazy"
+            decoding="async"
             className="aspect-4/3 w-full object-cover transition duration-500 group-hover:scale-[1.03]"
           />
 

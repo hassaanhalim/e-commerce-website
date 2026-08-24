@@ -87,12 +87,44 @@ function getAvailableQuantity(item: any): number {
   return Math.max(0, qOnHand - qReserved);
 }
 
+// ── In-Memory Cache Structures ────────────────────────────────────────────────
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+const CATEGORIES_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const BRANDS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const PRODUCT_SLUG_TTL_MS = 60 * 1000; // 1 minute
+const PRODUCTS_LIST_TTL_MS = 30 * 1000; // 30 seconds
+
+let cachedCategories: CacheEntry<PublicCategory[]> | null = null;
+let cachedBrands: CacheEntry<PublicBrand[]> | null = null;
+const productSlugCache = new Map<string, CacheEntry<ProductDetailResponse>>();
+const productsListCache = new Map<string, CacheEntry<PaginatedProductsResponse>>();
+
 export const catalogApi = {
-  getCategories: () => apiRequest<PublicCategory[]>("/categories", { method: "GET" }),
+  getCategories: async (forceRefresh = false): Promise<PublicCategory[]> => {
+    const now = Date.now();
+    if (!forceRefresh && cachedCategories && cachedCategories.expiresAt > now) {
+      return cachedCategories.data;
+    }
+    const categories = await apiRequest<PublicCategory[]>("/categories", { method: "GET" });
+    cachedCategories = { data: categories, expiresAt: now + CATEGORIES_TTL_MS };
+    return categories;
+  },
 
-  getBrands: () => apiRequest<PublicBrand[]>("/brands", { method: "GET" }),
+  getBrands: async (forceRefresh = false): Promise<PublicBrand[]> => {
+    const now = Date.now();
+    if (!forceRefresh && cachedBrands && cachedBrands.expiresAt > now) {
+      return cachedBrands.data;
+    }
+    const brands = await apiRequest<PublicBrand[]>("/brands", { method: "GET" });
+    cachedBrands = { data: brands, expiresAt: now + BRANDS_TTL_MS };
+    return brands;
+  },
 
-  getProducts: async (params: ProductQueryParams = {}): Promise<PaginatedProductsResponse> => {
+  getProducts: async (params: ProductQueryParams = {}, forceRefresh = false): Promise<PaginatedProductsResponse> => {
     const query = new URLSearchParams();
 
     if (params.page) query.set("page", String(params.page));
@@ -108,8 +140,17 @@ export const catalogApi = {
     if (params.sort) query.set("sort", params.sort);
 
     const queryString = query.toString();
-    const path = `/products${queryString ? `?${queryString}` : ""}`;
+    const cacheKey = queryString || "__default__";
+    const now = Date.now();
 
+    if (!forceRefresh) {
+      const cached = productsListCache.get(cacheKey);
+      if (cached && cached.expiresAt > now) {
+        return cached.data;
+      }
+    }
+
+    const path = `/products${queryString ? `?${queryString}` : ""}`;
     const raw = await apiRequest<any>(path, { method: "GET" });
 
     // Handle both wrapped response shape { data, meta } and direct array
@@ -155,14 +196,28 @@ export const catalogApi = {
       };
     });
 
-    return {
+    const result: PaginatedProductsResponse = {
       data,
       meta,
     };
+
+    productsListCache.set(cacheKey, { data: result, expiresAt: now + PRODUCTS_LIST_TTL_MS });
+
+    return result;
   },
 
-  getProductBySlug: async (slug: string): Promise<ProductDetailResponse> => {
-    const raw = await apiRequest<any>(`/products/${slug}`, { method: "GET" });
+  getProductBySlug: async (slug: string, forceRefresh = false): Promise<ProductDetailResponse> => {
+    const normalizedSlug = slug.trim();
+    const now = Date.now();
+
+    if (!forceRefresh) {
+      const cached = productSlugCache.get(normalizedSlug);
+      if (cached && cached.expiresAt > now) {
+        return cached.data;
+      }
+    }
+
+    const raw = await apiRequest<any>(`/products/${encodeURIComponent(normalizedSlug)}`, { method: "GET" });
 
     const brandName = typeof raw?.brand === "object" && raw.brand ? raw.brand.name || "" : (raw?.brand || "");
     const categoryName = typeof raw?.category === "object" && raw.category ? raw.category.name || "" : (raw?.category || "");
@@ -171,10 +226,10 @@ export const catalogApi = {
     const primaryImageObj = images.find((img) => img?.isPrimary);
     const mainImageUrl = primaryImageObj?.url || images[0]?.url || raw?.image || "https://placehold.co/600x400?text=No+Image";
 
-    return {
+    const result: ProductDetailResponse = {
       id: String(raw?.id || ""),
       name: raw?.name || "Product",
-      slug: raw?.slug || slug,
+      slug: raw?.slug || normalizedSlug,
       productCode: raw?.productCode || raw?.sku || "",
       brand: brandName,
       category: categoryName,
@@ -206,5 +261,25 @@ export const catalogApi = {
         : [],
       images,
     };
+
+    productSlugCache.set(normalizedSlug, { data: result, expiresAt: now + PRODUCT_SLUG_TTL_MS });
+
+    return result;
+  },
+
+  prefetchProduct: (slug: string): void => {
+    if (!slug) return;
+    const normalizedSlug = slug.trim();
+    const cached = productSlugCache.get(normalizedSlug);
+    if (!cached || cached.expiresAt <= Date.now()) {
+      catalogApi.getProductBySlug(normalizedSlug).catch(() => {});
+    }
+  },
+
+  clearCache: (): void => {
+    cachedCategories = null;
+    cachedBrands = null;
+    productSlugCache.clear();
+    productsListCache.clear();
   },
 };

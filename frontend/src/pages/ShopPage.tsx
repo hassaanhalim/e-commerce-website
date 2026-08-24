@@ -126,8 +126,13 @@ export function ShopPage() {
   }, []);
 
   useEffect(() => {
-    catalogApi.getCategories().then(setCategories).catch(() => {});
-    catalogApi.getBrands().then(setBrands).catch(() => {});
+    Promise.all([
+      catalogApi.getCategories().catch(() => []),
+      catalogApi.getBrands().catch(() => []),
+    ]).then(([cats, brs]) => {
+      setCategories(cats);
+      setBrands(brs);
+    });
   }, []);
 
   const selectedGender = (searchParams.get("gender") as ProductGender) || "";
@@ -731,10 +736,29 @@ export function ShopPage() {
       </p>
 
       {loading ? (
-        <div className="py-24 text-center">
-          <div className="inline-block h-10 w-10 animate-spin rounded-full border-4 border-[#748779] border-t-transparent"></div>
-          <p className="mt-4 text-xs font-semibold text-[#667085]">Loading catalog products...</p>
-        </div>
+        <section
+          aria-label="Loading products"
+          className={`grid gap-3 min-[375px]:gap-4 sm:gap-5 lg:gap-6 ${
+            gridCols === 4
+              ? "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3"
+          }`}
+        >
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="overflow-hidden rounded-2xl border border-[#E7E3DC] bg-white shadow-2xs p-3 sm:p-4 space-y-3 animate-pulse"
+            >
+              <div className="aspect-4/3 w-full rounded-xl bg-gray-200" />
+              <div className="h-3 w-1/3 rounded bg-gray-200" />
+              <div className="h-4 w-4/5 rounded bg-gray-200" />
+              <div className="flex items-center justify-between pt-2">
+                <div className="h-4 w-1/4 rounded bg-gray-200" />
+                <div className="h-4 w-1/5 rounded-full bg-gray-200" />
+              </div>
+            </div>
+          ))}
+        </section>
       ) : error ? (
         <div className="rounded-2xl border border-[#DC2626]/30 bg-[#FEF2F2] p-8 text-center text-[#DC2626]">
           <p className="font-bold text-base">{error}</p>

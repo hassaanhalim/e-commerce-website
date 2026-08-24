@@ -213,29 +213,27 @@ export class ReviewsService {
       status: ReviewStatus.APPROVED,
     };
 
-    const aggregate = await this.prisma.review.aggregate({
-      where: approvedWhere,
-      _avg: { rating: true },
-      _count: { rating: true },
-    });
+    const [aggregate, ratingGroups] = await Promise.all([
+      this.prisma.review.aggregate({
+        where: approvedWhere,
+        _avg: { rating: true },
+        _count: { rating: true },
+      }),
+      this.prisma.review.groupBy({
+        by: ["rating"],
+        where: approvedWhere,
+        _count: { rating: true },
+      }),
+    ]);
 
     const reviewCount = aggregate._count.rating ?? 0;
     const rawAverage = aggregate._avg.rating ?? 0;
     const averageRating = reviewCount > 0 ? Math.round(rawAverage * 10) / 10 : 0;
 
-    const ratingCounts = await Promise.all(
-      [5, 4, 3, 2, 1].map(async (star) => {
-        const count = await this.prisma.review.count({
-          where: { ...approvedWhere, rating: star },
-        });
-        return { rating: star, count };
-      }),
-    );
-
-    const breakdown: Record<number, number> = {};
-    ratingCounts.forEach((item) => {
-      breakdown[item.rating] = item.count;
-    });
+    const breakdown: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const group of ratingGroups) {
+      breakdown[group.rating] = group._count.rating;
+    }
 
     return {
       averageRating,

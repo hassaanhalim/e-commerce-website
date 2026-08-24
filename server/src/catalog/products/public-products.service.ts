@@ -73,21 +73,72 @@ export class PublicProductsService {
       ];
     }
 
-    // Fetch all matching items for sorting & size/color derivation
-    const rawProducts = await this.prisma.product.findMany({
-      where,
-      include: {
-        category: true,
-        brand: true,
-        variants: {
-          where: { isActive: true },
-          include: { inventory: true },
+    // Build Prisma order by
+    const sort = query.sort ?? "newest";
+    let orderBy: Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] = {
+      createdAt: "desc",
+    };
+    if (sort === "name-asc") {
+      orderBy = { name: "asc" };
+    } else if (sort === "name-desc") {
+      orderBy = { name: "desc" };
+    } else if (sort === "price-asc") {
+      orderBy = [{ salePrice: "asc" }, { basePrice: "asc" }];
+    } else if (sort === "price-desc") {
+      orderBy = [{ salePrice: "desc" }, { basePrice: "desc" }];
+    }
+
+    const skip = (page - 1) * limit;
+
+    // Fetch paginated products and total count concurrently
+    const [total, rawProducts] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          productCode: true,
+          basePrice: true,
+          salePrice: true,
+          gender: true,
+          isNew: true,
+          isFeatured: true,
+          createdAt: true,
+          brand: {
+            select: { id: true, name: true, slug: true },
+          },
+          category: {
+            select: { id: true, name: true, slug: true },
+          },
+          variants: {
+            where: { isActive: true },
+            select: {
+              size: true,
+              color: true,
+              inventory: {
+                select: {
+                  quantityOnHand: true,
+                  reservedQuantity: true,
+                },
+              },
+            },
+          },
+          images: {
+            select: {
+              url: true,
+              isPrimary: true,
+              sortOrder: true,
+            },
+            orderBy: { sortOrder: "asc" },
+          },
         },
-        images: {
-          orderBy: { sortOrder: "asc" },
-        },
-      },
-    });
+      }),
+    ]);
 
     const mapped = rawProducts.map((p) => {
       const basePriceNum = Number(p.basePrice);
@@ -111,7 +162,7 @@ export class PublicProductsService {
         name: p.name,
         slug: p.slug,
         productCode: p.productCode,
-        description: p.description,
+        description: "",
         brand: {
           id: p.brand.id,
           name: p.brand.name,
@@ -139,23 +190,8 @@ export class PublicProductsService {
       };
     });
 
-    // Apply sorting
-    const sort = query.sort ?? "newest";
-    mapped.sort((a, b) => {
-      if (sort === "price-asc") return a.displayPrice - b.displayPrice;
-      if (sort === "price-desc") return b.displayPrice - a.displayPrice;
-      if (sort === "name-asc") return a.name.localeCompare(b.name);
-      if (sort === "name-desc") return b.name.localeCompare(a.name);
-      // newest
-      return b.createdAt.getTime() - a.createdAt.getTime();
-    });
-
-    const total = mapped.length;
-    const skip = (page - 1) * limit;
-    const paginatedData = mapped.slice(skip, skip + limit);
-
     return {
-      data: paginatedData,
+      data: mapped,
       meta: {
         total,
         page,

@@ -117,22 +117,52 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 
   const toggleWishlist = useCallback(
     async (productId: string) => {
+      const id = String(productId);
       if (isAuthenticated) {
-        const alreadyIn = backendProducts.some((p) => p.id === productId);
+        const alreadyIn = backendProducts.some((p) => p.id === id);
+        const previousProducts = [...backendProducts];
+
+        // Optimistic update
         if (alreadyIn) {
-          await wishlistApi.removeItem(productId);
-          setBackendProducts((prev) => prev.filter((p) => p.id !== productId));
-        } else {
+          setBackendProducts((prev) => prev.filter((p) => p.id !== id));
           try {
-            const result = await wishlistApi.addItem(productId);
+            await wishlistApi.removeItem(id);
+          } catch {
+            // Revert on error
+            setBackendProducts(previousProducts);
+          }
+        } else {
+          // Optimistically add minimal placeholder
+          const optimisticPlaceholder: BackendWishlistProduct = {
+            id,
+            name: "Product",
+            slug: "",
+            productCode: "",
+            brand: "",
+            category: "",
+            price: 0,
+            salePrice: null,
+            displayPrice: 0,
+            image: "",
+            sizes: [],
+            colors: [],
+            availableQuantity: 1,
+            inStock: true,
+            isNew: false,
+            isFeatured: false,
+          };
+          setBackendProducts((prev) => [optimisticPlaceholder, ...prev]);
+
+          try {
+            const result = await wishlistApi.addItem(id);
             setBackendProducts(result.products ?? []);
           } catch {
-            // ignore – e.g. inactive product
+            // Revert on error
+            setBackendProducts(previousProducts);
           }
         }
       } else {
         setGuestIds((prev) => {
-          const id = String(productId);
           return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
         });
       }
@@ -142,14 +172,20 @@ export function WishlistProvider({ children }: { children: ReactNode }) {
 
   const removeFromWishlist = useCallback(
     async (productId: string) => {
+      const id = String(productId);
       if (isAuthenticated) {
-        await wishlistApi.removeItem(productId);
-        setBackendProducts((prev) => prev.filter((p) => p.id !== productId));
+        const previousProducts = [...backendProducts];
+        setBackendProducts((prev) => prev.filter((p) => p.id !== id));
+        try {
+          await wishlistApi.removeItem(id);
+        } catch {
+          setBackendProducts(previousProducts);
+        }
       } else {
-        setGuestIds((prev) => prev.filter((id) => id !== String(productId)));
+        setGuestIds((prev) => prev.filter((item) => item !== id));
       }
     },
-    [isAuthenticated],
+    [isAuthenticated, backendProducts],
   );
 
   const clearWishlist = useCallback(async () => {

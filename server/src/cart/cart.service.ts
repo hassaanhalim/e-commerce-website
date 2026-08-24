@@ -238,6 +238,8 @@ export class CartService {
 
       return cartItem;
     });
+
+    return this.getCart(userId);
   }
 
   async updateItem(userId: string, itemId: string, dto: UpdateCartItemDto) {
@@ -247,7 +249,7 @@ export class CartService {
       throw new BadRequestException("Quantity must be a positive integer.");
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const item = await tx.cartItem.findUnique({
         where: { id: itemId },
         include: {
@@ -278,6 +280,8 @@ export class CartService {
 
       return tx.cartItem.update({ where: { id: itemId }, data: { quantity } });
     });
+
+    return this.getCart(userId);
   }
 
   async removeItem(userId: string, itemId: string) {

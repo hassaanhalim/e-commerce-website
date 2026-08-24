@@ -59,10 +59,16 @@ function SearchResultsPage() {
       )}
 
       {loading ? (
-        <div className="py-20 text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-black border-t-transparent"></div>
-          <p className="mt-3 text-xs font-semibold text-gray-400">Searching products...</p>
-        </div>
+        <section aria-label="Searching products" className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <div key={idx} className="overflow-hidden rounded-2xl border border-[#E7E3DC] bg-white p-4 space-y-3 animate-pulse">
+              <div className="aspect-4/3 w-full rounded-xl bg-gray-200" />
+              <div className="h-3 w-1/3 rounded bg-gray-200" />
+              <div className="h-4 w-3/4 rounded bg-gray-200" />
+              <div className="h-4 w-1/4 rounded bg-gray-200 pt-2" />
+            </div>
+          ))}
+        </section>
       ) : query && matchingProducts.length > 0 ? (
         <section className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {matchingProducts.map((product) => (

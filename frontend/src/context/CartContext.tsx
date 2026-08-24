@@ -211,8 +211,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (itemId: string, quantity: number) => {
       if (isAuthenticated) {
         try {
-          await cartApi.updateItem(itemId, quantity);
-          await refreshCart();
+          const res = await cartApi.updateItem(itemId, quantity);
+          if (res && "items" in res && Array.isArray((res as any).items)) {
+            setBackendCart(res as BackendCart);
+          } else {
+            await refreshCart();
+          }
         } catch (err) {
           throw err;
         }
@@ -233,19 +237,23 @@ export function CartProvider({ children }: { children: ReactNode }) {
     async (itemId: string) => {
       if (isAuthenticated) {
         try {
-          await cartApi.removeItem(itemId);
+          // Optimistic local removal
           setBackendCart((prev) =>
             prev
               ? {
                   ...prev,
                   items: (prev.items ?? []).filter((i) => i.itemId !== itemId),
                   itemCount: prev.itemCount - ((prev.items ?? []).find((i) => i.itemId === itemId)?.quantity ?? 0),
+                  subtotal: (prev.items ?? [])
+                    .filter((i) => i.itemId !== itemId)
+                    .reduce((sum, i) => sum + i.lineTotal, 0),
                 }
               : prev,
           );
-          // Full refresh to get accurate subtotal
-          await refreshCart();
+          await cartApi.removeItem(itemId);
         } catch (err) {
+          // On error, sync back with backend
+          await refreshCart();
           throw err;
         }
       } else {

@@ -480,6 +480,8 @@ export function ProductDetailsPage() {
             <img
               src={currentImage.url}
               alt={currentImage.label}
+              loading="eager"
+              decoding="async"
               className="h-full w-full object-cover transition duration-300 group-hover:opacity-0"
             />
             {zoomStyle.backgroundImage && (
@@ -543,7 +545,13 @@ export function ProductDetailsPage() {
                     activeImageIndex === idx ? "border-[#748779] ring-1 ring-[#748779]" : "border-[#E7E3DC] hover:border-gray-400"
                   }`}
                 >
-                  <img src={img.url} alt={img.label} className="h-full w-full object-cover" />
+                  <img
+                    src={img.url}
+                    alt={img.label}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>
