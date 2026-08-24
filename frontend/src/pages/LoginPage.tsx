@@ -114,6 +114,7 @@ function LoginPage() {
     }
 
     setResendStatus("sending");
+    setError("");
     try {
       const result = await resendVerification(email.trim());
       setResendStatus("sent");

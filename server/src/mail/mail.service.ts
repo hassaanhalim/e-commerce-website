@@ -220,8 +220,15 @@ Thank you for choosing Shoe Store!
         return false;
       }
 
+      if (!response?.data?.id) {
+        this.logger.error(
+          `Resend API response contained no message ID for ${toEmail}: ${JSON.stringify(response)}`,
+        );
+        return false;
+      }
+
       this.logger.log(
-        `Email successfully delivered via Resend to ${toEmail} (ID: ${response?.data?.id || "ok"})`,
+        `Email successfully delivered via Resend to ${toEmail} (ID: ${response.data.id})`,
       );
       return true;
     } catch (error: any) {

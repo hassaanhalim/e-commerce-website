@@ -12,6 +12,8 @@ import { useAuth } from "../context/AuthContext";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import type { RegisterUserInput } from "../types/auth";
 
+const PENDING_EMAIL_STORAGE_KEY = "shoe-store-pending-verification-email";
+
 interface RegisterLocationState {
   from?: string;
 }
@@ -27,16 +29,25 @@ function RegisterPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Unverified existing account detection
+  const [unverifiedExistingEmail, setUnverifiedExistingEmail] = useState<string | null>(null);
 
   // Post-registration state
-  const [isRegistered, setIsRegistered] = useState(false);
-  const [registeredEmail, setRegisteredEmail] = useState("");
+  const [isRegistered, setIsRegistered] = useState(() => {
+    return Boolean(sessionStorage.getItem(PENDING_EMAIL_STORAGE_KEY));
+  });
+  const [registeredEmail, setRegisteredEmail] = useState(() => {
+    return sessionStorage.getItem(PENDING_EMAIL_STORAGE_KEY) || "";
+  });
   const [verificationEmailSent, setVerificationEmailSent] = useState(true);
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
   const [resendMessage, setResendMessage] = useState("");
 
   useEffect(() => {
     if (!isLoading && user) {
+      sessionStorage.removeItem(PENDING_EMAIL_STORAGE_KEY);
       navigate(user.role === "ADMIN" ? "/admin" : "/account", {
         replace: true,
       });
@@ -45,7 +56,10 @@ function RegisterPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
+
     setError("");
+    setUnverifiedExistingEmail(null);
 
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
       setError("Complete all required fields.");
@@ -62,6 +76,7 @@ function RegisterPage() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const response = await register({
         fullName,
@@ -70,18 +85,35 @@ function RegisterPage() {
         phone: phone.trim() || undefined,
       } satisfies RegisterUserInput);
 
-      setRegisteredEmail(response.email || email.trim());
+      const targetEmail = response.email || email.trim();
+      setRegisteredEmail(targetEmail);
       setVerificationEmailSent(response.verificationEmailSent !== false);
+      sessionStorage.setItem(PENDING_EMAIL_STORAGE_KEY, targetEmail);
       setIsRegistered(true);
-    } catch (registerError) {
-      setError(registerError instanceof Error ? registerError.message : "Unable to create the account.");
+    } catch (registerError: any) {
+      const errorCode = registerError?.code || registerError?.responseBody?.code;
+      const isUnverifiedAccount =
+        errorCode === "ACCOUNT_EXISTS_UNVERIFIED" ||
+        registerError?.message?.includes("hasn't been verified") ||
+        registerError?.message?.includes("already exists but hasn't been verified");
+
+      if (isUnverifiedAccount) {
+        setUnverifiedExistingEmail(email.trim());
+        setError("An account with this email already exists but hasn't been verified.");
+      } else {
+        setError(registerError instanceof Error ? registerError.message : "Unable to create the account.");
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   async function handleGoogleSuccess(credential: string) {
     setError("");
+    setUnverifiedExistingEmail(null);
     try {
       const authenticatedUser = await loginWithGoogle(credential);
+      sessionStorage.removeItem(PENDING_EMAIL_STORAGE_KEY);
       const locationState = location.state as RegisterLocationState | null;
 
       if (locationState?.from) {
@@ -103,13 +135,14 @@ function RegisterPage() {
     }
   }
 
-  async function handleResendVerification() {
-    if (!registeredEmail) return;
+  async function handleResendVerification(targetEmailOverride?: string) {
+    const target = targetEmailOverride || registeredEmail || email.trim();
+    if (!target) return;
 
     setResendStatus("sending");
     setError("");
     try {
-      const result = await resendVerification(registeredEmail);
+      const result = await resendVerification(target);
       setResendStatus("sent");
       setVerificationEmailSent(true);
       setResendMessage(result.message || "A new verification link has been sent to your email.");
@@ -119,6 +152,10 @@ function RegisterPage() {
         err instanceof Error ? err.message : "Failed to send verification email. Please try again.",
       );
     }
+  }
+
+  function handleBackToSignIn() {
+    sessionStorage.removeItem(PENDING_EMAIL_STORAGE_KEY);
   }
 
   // ── Success State: Check Email Screen ─────────────────────────────────────────
@@ -178,7 +215,7 @@ function RegisterPage() {
           <div className="mt-6 space-y-3">
             <button
               type="button"
-              onClick={handleResendVerification}
+              onClick={() => handleResendVerification()}
               disabled={resendStatus === "sending"}
               className="w-full rounded-xl border border-[#E7E3DC] bg-white px-6 py-2.5 text-sm font-semibold text-[#20252B] shadow-2xs transition hover:bg-[#F7F5F1] disabled:opacity-50 cursor-pointer"
             >
@@ -187,6 +224,7 @@ function RegisterPage() {
 
             <Link
               to="/login"
+              onClick={handleBackToSignIn}
               className="inline-block w-full rounded-xl bg-[#748779] px-6 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-[#5E7063] cursor-pointer"
             >
               Back to sign in
@@ -304,14 +342,44 @@ function RegisterPage() {
             />
           </div>
 
-          {error && <p className="rounded-xl bg-[#FEF2F2] border border-[#DC2626]/20 px-4 py-2.5 text-xs font-medium text-[#DC2626]">{error}</p>}
+          {unverifiedExistingEmail ? (
+            <div className="rounded-xl bg-[#FFFBEB] border border-[#F59E0B]/30 p-3.5 text-xs text-[#B45309]">
+              <p className="font-semibold">Unverified Account Found</p>
+              <p className="mt-1">
+                An account with this email already exists but hasn't been verified yet.
+              </p>
+              {resendStatus === "sent" ? (
+                <p className="mt-2.5 rounded-lg bg-[#E5EAE6] border border-[#748779]/30 p-2 text-xs font-medium text-[#748779]">
+                  {resendMessage}
+                </p>
+              ) : (
+                <div className="mt-2.5 pt-2 border-t border-[#F59E0B]/20 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => handleResendVerification(unverifiedExistingEmail)}
+                    disabled={resendStatus === "sending"}
+                    className="font-bold text-[#748779] hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    {resendStatus === "sending" ? "Sending link..." : "Resend verification email"}
+                  </button>
+                  <Link to="/login" className="font-bold text-[#20252B] hover:underline">
+                    Sign in
+                  </Link>
+                </div>
+              )}
+            </div>
+          ) : error ? (
+            <p className="rounded-xl bg-[#FEF2F2] border border-[#DC2626]/20 px-4 py-2.5 text-xs font-medium text-[#DC2626]">
+              {error}
+            </p>
+          ) : null}
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isSubmitting || isLoading}
             className="w-full rounded-xl bg-[#748779] px-6 py-3 font-semibold text-white shadow-xs transition hover:bg-[#5E7063] disabled:cursor-not-allowed disabled:opacity-70 cursor-pointer"
           >
-            {isLoading ? "Creating account..." : "Create Account"}
+            {isSubmitting ? "Creating account..." : "Create Account"}
           </button>
         </form>
 

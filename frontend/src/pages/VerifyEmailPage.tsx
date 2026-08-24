@@ -50,6 +50,7 @@ export function VerifyEmailPage() {
     if (!resendEmail.trim()) return;
 
     setResendStatus("sending");
+    setErrorMessage("");
     try {
       const res = await resendVerification(resendEmail.trim());
       setResendStatus("sent");

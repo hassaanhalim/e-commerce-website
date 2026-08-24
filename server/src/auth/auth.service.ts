@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -38,6 +39,8 @@ export type RegisterResult = {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
@@ -181,6 +184,14 @@ export class AuthService {
 
     const existingUser = await this.usersService.findAuthUserByEmail(normalizedEmail);
     if (existingUser) {
+      if (!existingUser.emailVerifiedAt) {
+        throw new ConflictException({
+          statusCode: 409,
+          code: "ACCOUNT_EXISTS_UNVERIFIED",
+          message: "An account with this email already exists but hasn't been verified.",
+          email: normalizedEmail,
+        });
+      }
       throw new ConflictException("An account with this email already exists.");
     }
 
@@ -197,20 +208,36 @@ export class AuthService {
       phone: input.phone,
     });
 
-    // Generate secure verification token
-    const token = this.generateVerificationToken();
-    const tokenHash = this.hashVerificationToken(token);
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+    this.logger.log(`Customer account persisted in database: ${user.id} (${user.email})`);
 
-    await this.usersService.createVerificationToken(user.id, tokenHash, expiresAt);
+    let verificationEmailSent = false;
+    try {
+      // Generate secure verification token
+      const token = this.generateVerificationToken();
+      const tokenHash = this.hashVerificationToken(token);
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
 
-    // Attempt delivery safely (never roll back the created user if email delivery fails)
-    const emailSent = await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
+      await this.usersService.createVerificationToken(user.id, tokenHash, expiresAt);
+      this.logger.log(`Verification token generated and stored for user: ${user.id}`);
+
+      // Attempt delivery safely (never roll back the created user if email delivery fails)
+      verificationEmailSent = await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
+      if (verificationEmailSent) {
+        this.logger.log(`Verification email successfully dispatched to ${user.email}`);
+      } else {
+        this.logger.warn(`Verification email delivery failed for ${user.email} (user persisted)`);
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to generate token or dispatch email for user ${user.id}: ${error?.message || error}`,
+      );
+      verificationEmailSent = false;
+    }
 
     return {
       accountCreated: true,
-      verificationEmailSent: emailSent,
-      message: emailSent
+      verificationEmailSent,
+      message: verificationEmailSent
         ? "Registration successful. We sent a verification link to your email."
         : "Your account was created, but we couldn't send the verification email. Please use Resend verification email.",
       email: user.email,

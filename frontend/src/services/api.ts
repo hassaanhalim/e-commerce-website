@@ -12,11 +12,23 @@ type RequestOptions = RequestInit & {
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
+  email?: string;
+  responseBody?: unknown;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    code?: string,
+    email?: string,
+    responseBody?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
+    this.email = email;
+    this.responseBody = responseBody;
   }
 }
 
@@ -41,24 +53,42 @@ async function refreshAccessSession(): Promise<boolean> {
   return refreshPromise;
 }
 
-async function readErrorMessage(response: Response): Promise<string> {
+async function readErrorDetails(response: Response): Promise<{
+  message: string;
+  code?: string;
+  email?: string;
+  body?: unknown;
+}> {
   const contentType = response.headers.get("content-type") || "";
 
   if (contentType.includes("application/json")) {
     try {
-      const body = (await response.json()) as { message?: unknown };
+      const body = (await response.json()) as {
+        message?: unknown;
+        code?: string;
+        email?: string;
+        statusCode?: number;
+      };
+      let message = response.statusText || "Request failed.";
       if (Array.isArray(body.message)) {
-        return body.message.join(", ");
+        message = body.message.join(", ");
+      } else if (typeof body.message === "string") {
+        message = body.message;
       }
-      if (typeof body.message === "string") {
-        return body.message;
-      }
+      return {
+        message,
+        code: typeof body.code === "string" ? body.code : undefined,
+        email: typeof body.email === "string" ? body.email : undefined,
+        body,
+      };
     } catch {
       // Fall through to default status message.
     }
   }
 
-  return response.statusText || "Request failed.";
+  return {
+    message: response.statusText || "Request failed.",
+  };
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -101,7 +131,14 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   }
 
   if (!response.ok) {
-    throw new ApiError(await readErrorMessage(response), response.status);
+    const details = await readErrorDetails(response);
+    throw new ApiError(
+      details.message,
+      response.status,
+      details.code,
+      details.email,
+      details.body,
+    );
   }
 
   return parseResponse<T>(response);
