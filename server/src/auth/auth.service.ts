@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 import type { SafeUserProfile } from "../users/users.types";
@@ -26,6 +27,12 @@ type LoginInput = {
   password: string;
 };
 
+export type RegisterResult = {
+  message: string;
+  email: string;
+  requiresVerification: boolean;
+};
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -34,6 +41,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
+    private readonly mailService: MailService,
   ) {}
 
   private normalizeEmail(email: string) {
@@ -67,8 +75,18 @@ export class AuthService {
       .digest("hex");
   }
 
+  private hashVerificationToken(token: string): string {
+    return createHmac("sha256", this.getRefreshTokenHashSecret())
+      .update(token)
+      .digest("hex");
+  }
+
   private generateRefreshToken(): string {
     return randomBytes(64).toString("base64url");
+  }
+
+  private generateVerificationToken(): string {
+    return randomBytes(32).toString("hex");
   }
 
   private getRefreshTokenExpiresAt(): Date {
@@ -87,6 +105,13 @@ export class AuthService {
         ],
       },
     });
+
+    // Cleanup expired email verification tokens
+    await this.prisma.emailVerificationToken.deleteMany({
+      where: {
+        expiresAt: { lt: now },
+      },
+    });
   }
 
   private buildAccessTokenPayload(
@@ -101,15 +126,15 @@ export class AuthService {
   ): Promise<string> {
     return this.jwtService.signAsync(payload, {
       secret: this.getAccessTokenSecret(),
-      expiresIn: `${this.getAccessTokenTtlSeconds()}s`,
+      expiresIn: this.getAccessTokenTtlSeconds(),
     });
   }
 
   private async createSessionAndTokens(
     user: SafeUserProfile,
   ): Promise<AuthSessionResult> {
-    const refreshToken = this.generateRefreshToken();
-    const refreshTokenHash = this.hashRefreshToken(refreshToken);
+    const rawRefreshToken = this.generateRefreshToken();
+    const refreshTokenHash = this.hashRefreshToken(rawRefreshToken);
     const refreshTokenExpiresAt = this.getRefreshTokenExpiresAt();
 
     const session = await this.usersService.createRefreshSession({
@@ -125,7 +150,7 @@ export class AuthService {
     return {
       user,
       accessToken,
-      refreshToken,
+      refreshToken: rawRefreshToken,
       refreshSessionId: session.id,
       accessTokenExpiresInSeconds: this.getAccessTokenTtlSeconds(),
       refreshTokenExpiresAt,
@@ -134,9 +159,7 @@ export class AuthService {
 
   async hashPassword(password: string): Promise<string> {
     const argon2 = await import("argon2");
-    return argon2.default.hash(password, {
-      type: argon2.default.argon2id,
-    });
+    return argon2.default.hash(password);
   }
 
   async verifyPassword(
@@ -149,7 +172,7 @@ export class AuthService {
 
   async registerCustomer(
     input: RegisterCustomerInput,
-  ): Promise<AuthSessionResult> {
+  ): Promise<RegisterResult> {
     await this.cleanupStaleSessions();
     const normalizedEmail = this.normalizeEmail(input.email);
 
@@ -171,7 +194,88 @@ export class AuthService {
       phone: input.phone,
     });
 
-    return this.createSessionAndTokens(user);
+    // Generate secure verification token
+    const token = this.generateVerificationToken();
+    const tokenHash = this.hashVerificationToken(token);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes
+
+    await this.usersService.createVerificationToken(user.id, tokenHash, expiresAt);
+
+    // Send verification email safely (does not fail account creation if SMTP has issues)
+    await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
+
+    return {
+      message: "Registration successful. We sent a verification link to your email.",
+      email: user.email,
+      requiresVerification: true,
+    };
+  }
+
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    if (!token || typeof token !== "string") {
+      throw new BadRequestException("Verification token is required.");
+    }
+
+    const tokenHash = this.hashVerificationToken(token.trim());
+    const verificationRecord = await this.usersService.findVerificationToken(tokenHash);
+
+    if (!verificationRecord) {
+      throw new BadRequestException("Verification link is invalid or has expired.");
+    }
+
+    if (verificationRecord.expiresAt.getTime() <= Date.now()) {
+      await this.usersService.deleteVerificationTokensForUser(verificationRecord.userId);
+      throw new BadRequestException("Verification link has expired. Please request a new one.");
+    }
+
+    // Mark user verified and remove tokens
+    await this.usersService.markEmailVerified(verificationRecord.userId);
+    await this.usersService.deleteVerificationTokensForUser(verificationRecord.userId);
+
+    // Send welcome email
+    if (verificationRecord.user) {
+      await this.mailService.sendWelcomeEmail(
+        verificationRecord.user.email,
+        verificationRecord.user.fullName,
+      );
+    }
+
+    return {
+      message: "Your email has been verified successfully. You can now sign in.",
+    };
+  }
+
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    if (!email || typeof email !== "string") {
+      throw new BadRequestException("Email is required.");
+    }
+
+    const normalizedEmail = this.normalizeEmail(email);
+    const user = await this.usersService.findByEmail(normalizedEmail);
+
+    // Neutral response to avoid account enumeration
+    if (!user) {
+      return {
+        message: "If an unverified account exists with this email, a verification link has been sent.",
+      };
+    }
+
+    if (user.emailVerifiedAt) {
+      return {
+        message: "This email address is already verified. You can sign in.",
+      };
+    }
+
+    const token = this.generateVerificationToken();
+    const tokenHash = this.hashVerificationToken(token);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await this.usersService.createVerificationToken(user.id, tokenHash, expiresAt);
+    await this.mailService.sendVerificationEmail(user.email, user.fullName, token);
+
+    return {
+      message: "A new verification link has been sent to your email address.",
+    };
   }
 
   async login(input: LoginInput): Promise<AuthSessionResult> {
@@ -181,6 +285,12 @@ export class AuthService {
 
     if (!authUser || !authUser.isActive) {
       throw new UnauthorizedException("Invalid email or password");
+    }
+
+    if (!authUser.passwordHash) {
+      throw new UnauthorizedException(
+        "This account is registered with Google. Please click 'Continue with Google' to sign in.",
+      );
     }
 
     const isPasswordValid = await this.verifyPassword(
@@ -201,6 +311,16 @@ export class AuthService {
       throw new UnauthorizedException("Invalid email or password");
     }
 
+    // Check email verification status for customers
+    if (authUser.role === "CUSTOMER" && !authUser.emailVerifiedAt) {
+      throw new UnauthorizedException({
+        statusCode: 401,
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Please verify your email before signing in.",
+        email: authUser.email,
+      });
+    }
+
     const user = await this.usersService.findById(authUser.id);
 
     if (!user || !user.isActive) {
@@ -218,6 +338,108 @@ export class AuthService {
     }
 
     return this.createSessionAndTokens(user);
+  }
+
+  async authenticateWithGoogle(credential: string): Promise<AuthSessionResult> {
+    if (!credential || typeof credential !== "string") {
+      throw new BadRequestException("Google credential token is required.");
+    }
+
+    const googleClientId = this.configService.get<string>("GOOGLE_CLIENT_ID")?.trim();
+    if (!googleClientId) {
+      throw new BadRequestException(
+        "Google authentication is not configured on this server.",
+      );
+    }
+
+    const { OAuth2Client } = await import("google-auth-library");
+    const client = new OAuth2Client(googleClientId);
+
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: googleClientId,
+      });
+    } catch {
+      throw new UnauthorizedException("This Google account could not be verified.");
+    }
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.sub || !payload.email) {
+      throw new UnauthorizedException("Invalid Google identity token payload.");
+    }
+
+    if (!payload.email_verified) {
+      throw new UnauthorizedException("Your Google email address is not verified by Google.");
+    }
+
+    const googleSub = payload.sub;
+    const googleEmail = this.normalizeEmail(payload.email);
+    const googleName = payload.name?.trim() || "Shoe Store Customer";
+
+    // 1. Check if identity already exists
+    const existingIdentity = await this.usersService.findIdentityByProvider(
+      "GOOGLE",
+      googleSub,
+    );
+
+    if (existingIdentity && existingIdentity.user) {
+      const user = existingIdentity.user;
+      if (!user.isActive) {
+        throw new UnauthorizedException("Your account is disabled.");
+      }
+
+      if (!user.emailVerifiedAt) {
+        await this.usersService.markEmailVerified(user.id);
+      }
+
+      return this.createSessionAndTokens(user);
+    }
+
+    // 2. Identity not found. Check if an existing User exists with the same email (Safe Linking)
+    const existingUser = await this.usersService.findByEmail(googleEmail);
+    if (existingUser) {
+      if (!existingUser.isActive) {
+        throw new UnauthorizedException("Your account is disabled.");
+      }
+
+      // Link Google identity to existing user and ensure emailVerifiedAt is set
+      const linkedUser = await this.usersService.linkGoogleIdentity(
+        existingUser.id,
+        googleSub,
+      );
+
+      await this.auditService.logAction({
+        actorUserId: linkedUser.id,
+        action: "GOOGLE_ACCOUNT_LINKED",
+        entityType: "USER",
+        entityId: linkedUser.id,
+        description: `Linked Google identity (${googleSub}) to account "${googleEmail}".`,
+      });
+
+      return this.createSessionAndTokens(linkedUser);
+    }
+
+    // 3. Brand new user registering with Google
+    const newUser = await this.usersService.createGoogleCustomerAccount({
+      fullName: googleName,
+      email: googleEmail,
+      googleSub,
+    });
+
+    await this.auditService.logAction({
+      actorUserId: newUser.id,
+      action: "CUSTOMER_REGISTER_GOOGLE",
+      entityType: "USER",
+      entityId: newUser.id,
+      description: `New customer registered via Google identity: "${googleEmail}".`,
+    });
+
+    // Send welcome email once for first-time Google registrations
+    await this.mailService.sendWelcomeEmail(newUser.email, newUser.fullName);
+
+    return this.createSessionAndTokens(newUser);
   }
 
   async refresh(refreshToken: string | undefined): Promise<AuthSessionResult> {

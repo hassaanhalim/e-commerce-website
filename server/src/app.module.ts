@@ -6,6 +6,7 @@ import { AuthModule } from "./auth/auth.module";
 import { CartModule } from "./cart/cart.module";
 import { CatalogModule } from "./catalog/catalog.module";
 import { HealthModule } from "./health/health.module";
+import { MailModule } from "./mail/mail.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { UsersModule } from "./users/users.module";
 import { WishlistModule } from "./wishlist/wishlist.module";
@@ -34,10 +35,17 @@ import { HomepageModule } from "./homepage/homepage.module";
         FRONTEND_URL: Joi.string().uri().optional(),
         TRUSTED_ORIGINS: Joi.string().optional(),
         RETURN_WINDOW_DAYS: Joi.number().integer().positive().default(14),
+        SMTP_HOST: Joi.string().default("smtp.gmail.com"),
+        SMTP_PORT: Joi.number().default(587),
+        SMTP_USER: Joi.string().optional().allow(""),
+        SMTP_APP_PASSWORD: Joi.string().optional().allow(""),
+        EMAIL_FROM: Joi.string().optional().allow(""),
+        GOOGLE_CLIENT_ID: Joi.string().optional().allow(""),
       }),
     }),
     PrismaModule,
     AuditModule,
+    MailModule,
     UsersModule,
     AuthModule,
     HealthModule,

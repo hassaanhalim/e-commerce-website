@@ -7,6 +7,7 @@ export type SafeUserProfile = {
   role: UserRole;
   phone: string | null;
   isActive: boolean;
+  emailVerifiedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -18,6 +19,7 @@ export const safeUserSelect = {
   role: true,
   phone: true,
   isActive: true,
+  emailVerifiedAt: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;
@@ -30,6 +32,7 @@ export const authUserSelect = {
   role: true,
   phone: true,
   isActive: true,
+  emailVerifiedAt: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.UserSelect;

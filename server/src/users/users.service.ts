@@ -44,6 +44,7 @@ export class UsersService {
     role: AuthUserRecord["role"];
     phone: string | null;
     isActive: boolean;
+    emailVerifiedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }): SafeUserProfile {
@@ -54,6 +55,7 @@ export class UsersService {
       role: user.role,
       phone: user.phone,
       isActive: user.isActive,
+      emailVerifiedAt: user.emailVerifiedAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -85,6 +87,123 @@ export class UsersService {
     return this.prisma.user.findUnique({
       where: { email: normalizedEmail },
       select: authUserSelect,
+    });
+  }
+
+  async findIdentityByProvider(
+    provider: "LOCAL" | "GOOGLE",
+    providerAccountId: string,
+  ) {
+    return this.prisma.userIdentity.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider,
+          providerAccountId,
+        },
+      },
+      include: {
+        user: {
+          select: safeUserSelect,
+        },
+      },
+    });
+  }
+
+  async createGoogleCustomerAccount(input: {
+    fullName: string;
+    email: string;
+    googleSub: string;
+  }): Promise<SafeUserProfile> {
+    const normalizedEmail = this.normalizeEmail(input.email);
+
+    const user = await this.prisma.user.create({
+      data: {
+        fullName: input.fullName.trim() || "Shoe Store Customer",
+        email: normalizedEmail,
+        passwordHash: null,
+        role: "CUSTOMER",
+        emailVerifiedAt: new Date(),
+        identities: {
+          create: {
+            provider: "GOOGLE",
+            providerAccountId: input.googleSub,
+          },
+        },
+      },
+      select: safeUserSelect,
+    });
+
+    return this.toSafeUser(user);
+  }
+
+  async linkGoogleIdentity(
+    userId: string,
+    googleSub: string,
+  ): Promise<SafeUserProfile> {
+    await this.prisma.userIdentity.create({
+      data: {
+        userId,
+        provider: "GOOGLE",
+        providerAccountId: googleSub,
+      },
+    });
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerifiedAt: new Date(),
+      },
+      select: safeUserSelect,
+    });
+
+    return this.toSafeUser(user);
+  }
+
+  async markEmailVerified(userId: string): Promise<SafeUserProfile> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerifiedAt: new Date(),
+      },
+      select: safeUserSelect,
+    });
+
+    return this.toSafeUser(user);
+  }
+
+  async createVerificationToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ) {
+    // Invalidate existing tokens for this user first
+    await this.prisma.emailVerificationToken.deleteMany({
+      where: { userId },
+    });
+
+    return this.prisma.emailVerificationToken.create({
+      data: {
+        userId,
+        tokenHash,
+        expiresAt,
+      },
+    });
+  }
+
+  async findVerificationToken(tokenHash: string) {
+    return this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: {
+          select: safeUserSelect,
+        },
+      },
+    });
+  }
+
+  async deleteVerificationTokensForUser(userId: string) {
+    return this.prisma.emailVerificationToken.deleteMany({
+      where: { userId },
     });
   }
 
@@ -189,6 +308,7 @@ export class UsersService {
         passwordHash: input.passwordHash,
         role: "CUSTOMER",
         phone: input.phone?.trim() || null,
+        emailVerifiedAt: null,
       },
       select: safeUserSelect,
     });

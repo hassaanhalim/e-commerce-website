@@ -104,6 +104,7 @@ export interface AuthUser {
   role: UserRole;
   phone: string | null;
   isActive: boolean;
+  emailVerifiedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -118,4 +119,14 @@ export interface RegisterUserInput {
   email: string;
   password: string;
   phone?: string;
+}
+
+export interface RegisterResponse {
+  message: string;
+  email: string;
+  requiresVerification: boolean;
+}
+
+export interface MessageResponse {
+  message: string;
 }

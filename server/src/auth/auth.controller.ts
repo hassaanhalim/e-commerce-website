@@ -5,8 +5,11 @@ import { AUTH_ACCESS_COOKIE_NAME, AUTH_REFRESH_COOKIE_NAME } from "./auth.consta
 import { AuthService } from "./auth.service";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import { Public } from "./decorators/public.decorator";
+import { GoogleAuthDto } from "./dto/google-auth.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ResendVerificationDto } from "./dto/resend-verification.dto";
+import { VerifyEmailDto } from "./dto/verify-email.dto";
 import type { AuthenticatedUser } from "./auth.types";
 
 @ApiTags("auth")
@@ -39,12 +42,39 @@ export class AuthController {
   @Public()
   @ApiOperation({ summary: "Register a new customer account" })
   @ApiBody({ type: RegisterDto })
-  @ApiCreatedResponse({ description: "Customer registered successfully." })
-  async register(
-    @Body() dto: RegisterDto,
+  @ApiCreatedResponse({ description: "Customer registered successfully. Verification email sent." })
+  async register(@Body() dto: RegisterDto) {
+    return this.authService.registerCustomer(dto);
+  }
+
+  @Post("verify-email")
+  @Public()
+  @ApiOperation({ summary: "Verify email address using verification token" })
+  @ApiBody({ type: VerifyEmailDto })
+  @ApiOkResponse({ description: "Email verified successfully." })
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Post("resend-verification")
+  @Public()
+  @ApiOperation({ summary: "Resend email verification link" })
+  @ApiBody({ type: ResendVerificationDto })
+  @ApiOkResponse({ description: "Verification email sent if account exists." })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerificationEmail(dto.email);
+  }
+
+  @Post("google")
+  @Public()
+  @ApiOperation({ summary: "Authenticate with Google Identity Services ID token" })
+  @ApiBody({ type: GoogleAuthDto })
+  @ApiOkResponse({ description: "User authenticated successfully with Google." })
+  async google(
+    @Body() dto: GoogleAuthDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.authService.registerCustomer(dto);
+    const result = await this.authService.authenticateWithGoogle(dto.credential);
     this.setAuthCookies(response, result.accessToken, result.refreshToken);
     return result.user;
   }

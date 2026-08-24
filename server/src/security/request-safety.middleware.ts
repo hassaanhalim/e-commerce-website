@@ -25,6 +25,9 @@ const RATE_LIMITS = {
   register: { limit: 5, windowMs: 15 * 60 * 1000 },
   login: { limit: 10, windowMs: 5 * 60 * 1000 },
   refresh: { limit: 30, windowMs: 5 * 60 * 1000 },
+  resendVerification: { limit: 5, windowMs: 15 * 60 * 1000 },
+  verifyEmail: { limit: 10, windowMs: 5 * 60 * 1000 },
+  google: { limit: 15, windowMs: 5 * 60 * 1000 },
 } as const;
 
 type Bucket = {
@@ -48,6 +51,9 @@ function getRouteName(request: Request): keyof typeof RATE_LIMITS | null {
   if (request.path === "/api/v1/auth/register") return "register";
   if (request.path === "/api/v1/auth/login") return "login";
   if (request.path === "/api/v1/auth/refresh") return "refresh";
+  if (request.path === "/api/v1/auth/resend-verification") return "resendVerification";
+  if (request.path === "/api/v1/auth/verify-email") return "verifyEmail";
+  if (request.path === "/api/v1/auth/google") return "google";
   return null;
 }
 

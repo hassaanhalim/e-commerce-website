@@ -15,6 +15,7 @@ import RegisterPage from "./pages/RegisterPage";
 import SearchResultsPage from "./pages/SearchResultsPage";
 import ShopPage from "./pages/ShopPage";
 import SizeGuidePage from "./pages/SizeGuidePage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 
 // Customer Account Imports
 import AccountLayout from "./components/layout/AccountLayout";
@@ -71,6 +72,7 @@ function App() {
           <Route path="/order-success" element={<OrderSuccessPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/verify-email" element={<VerifyEmailPage />} />
           <Route path="/wishlist" element={<GuestWishlistPage />} />
           <Route path="/track-order" element={<TrackOrderPage />} />
 

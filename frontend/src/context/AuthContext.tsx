@@ -13,6 +13,8 @@ import type {
   AuthUser,
   LoginUserInput,
   RegisterUserInput,
+  RegisterResponse,
+  MessageResponse,
   SavedAddress,
   BackendAddress,
   CreateAddressInput,
@@ -23,7 +25,10 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (input: LoginUserInput) => Promise<AuthUser>;
-  register: (input: RegisterUserInput) => Promise<AuthUser>;
+  loginWithGoogle: (credential: string) => Promise<AuthUser>;
+  register: (input: RegisterUserInput) => Promise<RegisterResponse>;
+  verifyEmail: (token: string) => Promise<MessageResponse>;
+  resendVerification: (email: string) => Promise<MessageResponse>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
   updateProfile: (fullName: string, phone: string) => void;
@@ -172,13 +177,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [setAuthenticatedUser],
   );
 
-  const register = useCallback(
-    async (input: RegisterUserInput) => {
-      const authenticatedUser = await authApi.register(input);
+  const loginWithGoogle = useCallback(
+    async (credential: string) => {
+      const authenticatedUser = await authApi.loginWithGoogle(credential);
       setAuthenticatedUser(authenticatedUser);
       return authenticatedUser;
     },
     [setAuthenticatedUser],
+  );
+
+  const register = useCallback(
+    async (input: RegisterUserInput) => {
+      return authApi.register(input);
+    },
+    [],
+  );
+
+  const verifyEmail = useCallback(
+    async (token: string) => {
+      return authApi.verifyEmail(token);
+    },
+    [],
+  );
+
+  const resendVerification = useCallback(
+    async (email: string) => {
+      return authApi.resendVerification(email);
+    },
+    [],
   );
 
   const logout = useCallback(async () => {
@@ -331,7 +357,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: user !== null,
       isLoading,
       login,
+      loginWithGoogle,
       register,
+      verifyEmail,
+      resendVerification,
       logout,
       logoutAll,
       updateProfile,
@@ -347,7 +376,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       isLoading,
       login,
+      loginWithGoogle,
       register,
+      verifyEmail,
+      resendVerification,
       logout,
       logoutAll,
       updateProfile,
