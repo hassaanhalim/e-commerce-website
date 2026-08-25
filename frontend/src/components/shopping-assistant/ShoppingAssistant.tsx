@@ -517,10 +517,32 @@ export function ShoppingAssistant() {
           <div
             ref={messagesContainerRef}
             className="flex-1 space-y-3 overflow-y-auto bg-[#FBFAF7]/40 p-3.5 sm:p-4"
+            aria-live="polite"
+            aria-relevant="additions"
           >
             {messages.map((msg) => (
               <ShoppingAssistantMessage key={msg.id} message={msg} />
             ))}
+
+            {/* Quick-Reply Option Chips — rendered below the latest assistant message */}
+            {!isTyping &&
+              pendingQuestion?.options &&
+              pendingQuestion.options.length > 0 &&
+              messages.length > 1 &&
+              messages[messages.length - 1]?.role === "assistant" && (
+                <div className="flex flex-wrap gap-1.5 pl-9 animate-fadeIn">
+                  {pendingQuestion.options.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => handleSendMessage(option)}
+                      className="rounded-full border border-[#C9D5CC] bg-white px-3 py-1.5 text-xs font-medium text-[#353F38] shadow-2xs transition hover:border-[#748779] hover:bg-[#F4F6F4] active:scale-95"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              )}
 
             {isTyping && <ShoppingAssistantTypingIndicator />}
 

@@ -198,7 +198,7 @@ export class ShoppingAssistantService {
             systemInstruction: stateContextPrompt,
             responseMimeType: "application/json",
             temperature: 0.2,
-            maxOutputTokens: 350,
+            maxOutputTokens: 300,
             responseSchema: {
               type: Type.OBJECT,
               properties: {
@@ -235,7 +235,7 @@ export class ShoppingAssistantService {
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("LLM request timed out after 6s")), 6000),
+          setTimeout(() => reject(new Error("LLM request timed out after 5s")), 5000),
         );
 
         const result = await Promise.race([responsePromise, timeoutPromise]);
@@ -308,9 +308,10 @@ export class ShoppingAssistantService {
             (requestedSizeNum !== null && requestedSizeNum < 36);
 
           if (isFormal) {
+            const sizeNote = policyResult.mergedPreferences.size ? ` in size ${policyResult.mergedPreferences.size}` : "";
             finalResponse = {
               conversationId,
-              message: `I couldn't find any formal shoes in size ${policyResult.mergedPreferences.size ?? ""} in our current catalog. Would you like to see casual or everyday alternatives instead?`,
+              message: `I couldn't find formal shoes${sizeNote} in our current catalog. Would you like to see casual or everyday options${sizeNote} instead?`,
               preferences: policyResult.mergedPreferences,
               pendingQuestion: {
                 field: "RELAX_PURPOSE",
@@ -323,7 +324,7 @@ export class ShoppingAssistantService {
           } else if (isOutOfSizeRange) {
             finalResponse = {
               conversationId,
-              message: `Our store inventory currently carries adult footwear in sizes 36 to 44. Size ${policyResult.mergedPreferences.size} is not available in stock. Would you like to see available options in size 36 or another size?`,
+              message: `Size ${policyResult.mergedPreferences.size} is outside our current stock range. We carry adult footwear in EU sizes 36 to 44. Would you like to try a size within that range?`,
               preferences: policyResult.mergedPreferences,
               pendingQuestion: {
                 field: "SIZE",
@@ -336,7 +337,7 @@ export class ShoppingAssistantService {
           } else if (isChild) {
             finalResponse = {
               conversationId,
-              message: "Our store currently carries adult and teen footwear (sizes 36 to 44) and does not currently stock young children sizes. Would you like me to look for adult or teen footwear instead?",
+              message: "We currently carry adult and teen footwear in EU sizes 36 to 44, and don't stock children's sizes just yet. Would you like me to look for adult or teen options instead?",
               preferences: policyResult.mergedPreferences,
               pendingQuestion: {
                 field: "WEARER",
@@ -349,16 +350,24 @@ export class ShoppingAssistantService {
           } else if (policyResult.mergedPreferences.budgetMax && policyResult.mergedPreferences.budgetMax < 5000) {
             finalResponse = {
               conversationId,
-              message: `I couldn't find any in-stock shoes under Rs ${policyResult.mergedPreferences.budgetMax.toLocaleString()} in size ${policyResult.mergedPreferences.size ?? ""}. Would you like to check options in a higher price range?`,
+              message: `I couldn't find shoes under Rs ${policyResult.mergedPreferences.budgetMax.toLocaleString()}${policyResult.mergedPreferences.size ? ` in size ${policyResult.mergedPreferences.size}` : ""}. Would you like to see what's available at a slightly higher price?`,
               preferences: policyResult.mergedPreferences,
               pendingQuestion: { field: "BUDGET", type: "NUMBER" },
               readyForRecommendations: false,
               products: [],
             };
           } else {
+            // Build a natural summary of what was searched
+            const criteriaList: string[] = [];
+            if (policyResult.mergedPreferences.brand) criteriaList.push(policyResult.mergedPreferences.brand);
+            if (policyResult.mergedPreferences.purpose) criteriaList.push(policyResult.mergedPreferences.purpose.toLowerCase());
+            if (policyResult.mergedPreferences.size) criteriaList.push(`size ${policyResult.mergedPreferences.size}`);
+            if (policyResult.mergedPreferences.budgetMax) criteriaList.push(`under Rs ${policyResult.mergedPreferences.budgetMax.toLocaleString()}`);
+            const criteriaSummary = criteriaList.length > 0 ? ` matching ${criteriaList.join(", ")}` : "";
+
             finalResponse = {
               conversationId,
-              message: `I couldn't find an in-stock option matching all of those exact criteria in size ${policyResult.mergedPreferences.size ?? ""}. Would you like to try another brand or size?`,
+              message: `I couldn't find an in-stock option${criteriaSummary}. Would you like to adjust the brand, size, or budget?`,
               preferences: policyResult.mergedPreferences,
               pendingQuestion: {
                 field: "SIZE",
@@ -451,13 +460,19 @@ export class ShoppingAssistantService {
     preferences: ShoppingPreferences,
   ): boolean {
     const text = userMessage.trim().toLowerCase();
+
+    // 1. Size answers (pure numeric)
     if (pendingQuestion?.field === "SIZE" && /^\d{1,2}$/.test(text)) return true;
+
+    // 2. Wearer self/other answers
     if (
       pendingQuestion?.field === "WEARER" &&
       ["for me", "me", "myself", "for someone else", "someone else", "someone"].includes(text)
     ) {
       return true;
     }
+
+    // 3. Wearer relation answers
     if (
       pendingQuestion?.field === "WEARER_RELATION" &&
       [
@@ -469,6 +484,8 @@ export class ShoppingAssistantService {
     ) {
       return true;
     }
+
+    // 4. Relaxation prompt answers
     if (
       pendingQuestion?.field === "RELAX_PURPOSE" &&
       (["yes", "yeah", "yep", "sure", "ok", "no", "nope", "nah", "casual", "show casual"].includes(text) ||
@@ -477,7 +494,35 @@ export class ShoppingAssistantService {
     ) {
       return true;
     }
-    if (pendingQuestion?.type === "CHOICE" && ["yes", "no", "casual", "sports", "formal", "everyday"].includes(text)) return true;
+
+    // 5. Purpose answers (when asking for purpose)
+    if (
+      pendingQuestion?.field === "PURPOSE" &&
+      ["casual", "sports", "sporty", "formal", "everyday", "running", "gym", "athletic"].includes(text)
+    ) {
+      return true;
+    }
+
+    // 6. Age answers (when asking for age)
+    if (pendingQuestion?.field === "AGE" && /^\d{1,2}(?:\s*(?:years?(?:\s*old)?|yo|yr))?$/i.test(text)) {
+      return true;
+    }
+
+    // 7. Choice answers (yes/no/specific options)
+    if (pendingQuestion?.type === "CHOICE" && ["yes", "no", "casual", "sports", "formal", "everyday", "sporty"].includes(text)) return true;
+
+    // 8. Boolean confirmations
+    if (pendingQuestion?.type === "BOOLEAN" && ["yes", "yeah", "yep", "sure", "ok", "no", "nope", "nah"].includes(text)) return true;
+
+    // 9. Gender-only messages (no pending question required)
+    if (["men", "women", "men shoes", "men's shoes", "women shoes", "women's shoes", "for men", "for women"].includes(text)) return true;
+
+    // 10. Direct brand mentions (common known brands)
+    if (/^(?:show\s+)?(?:nike|adidas|puma|reebok|asics|new\s*balance|skechers)$/i.test(text)) return true;
+
+    // 11. Budget refinement ("cheaper", "something cheaper", "under XXXX")
+    if (text === "cheaper" || text === "something cheaper" || /^under\s+\d+$/.test(text)) return true;
+
     return false;
   }
 
@@ -831,7 +876,7 @@ export class ShoppingAssistantService {
           type: "CHOICE",
           options: ["My sister", "My brother", "My daughter", "My son", "My wife", "My husband", "A friend"],
         },
-        replyMessage: "Sure. Who are they for?",
+        replyMessage: "Sure, who are the shoes for? For example: sister, brother, wife, husband, son, or daughter.",
         canSearchCatalog: false,
       };
     }
@@ -979,35 +1024,35 @@ export class ShoppingAssistantService {
 
     // 10. Size is missing -> ASK_SIZE (Wearer-aware phrasing)
     if (state.size === null || state.size === undefined) {
-      let sizePrompt = "What shoe size do you wear?";
+      let sizePrompt = "What shoe size should I look for?";
       if (wearer?.relation === "daughter") {
         sizePrompt = "What shoe size does she usually wear?";
       } else if (wearer?.relation === "son") {
         sizePrompt = "What shoe size does he usually wear?";
       } else if (wearer?.relation === "sister") {
-        sizePrompt = "What size does your sister wear?";
+        sizePrompt = "What shoe size does she wear?";
       } else if (wearer?.relation === "brother") {
-        sizePrompt = "What size does your brother wear?";
+        sizePrompt = "What shoe size does he wear?";
       } else if (wearer?.relation === "husband") {
-        sizePrompt = "What size does your husband wear?";
+        sizePrompt = "What shoe size does he wear?";
       } else if (wearer?.relation === "wife") {
-        sizePrompt = "What size does your wife wear?";
+        sizePrompt = "What shoe size does she wear?";
       } else if (wearer?.relation === "mother") {
-        sizePrompt = "What size does your mother wear?";
+        sizePrompt = "What shoe size does she wear?";
       } else if (wearer?.relation === "father") {
-        sizePrompt = "What size does your father wear?";
+        sizePrompt = "What shoe size does he wear?";
       } else if (wearer?.relation === "friend") {
-        sizePrompt = "What size do they wear?";
+        sizePrompt = "What shoe size do they wear?";
       } else if (wearer?.type === "OTHER") {
         sizePrompt = "What shoe size do they wear?";
       } else if (isChild) {
         sizePrompt = "What shoe size does your child usually wear?";
       } else if (updates?.gender === "MEN") {
-        sizePrompt = "Got it, men's shoes! What size do you wear?";
+        sizePrompt = "Got it, men's shoes! What size should I look for?";
       } else if (updates?.gender === "WOMEN") {
-        sizePrompt = "Got it, women's shoes! What size do you wear?";
+        sizePrompt = "Got it, women's shoes! What size should I look for?";
       } else if (updates?.brand) {
-        sizePrompt = `Got it, ${updates.brand}! What shoe size do you wear?`;
+        sizePrompt = `Got it, ${updates.brand}! What shoe size should I look for?`;
       }
 
       return {
@@ -1030,9 +1075,9 @@ export class ShoppingAssistantService {
 
     // 12. Purpose is missing -> ASK_PURPOSE
     if (!state.purpose && !state.brand) {
-      let purposePrompt = "Are you looking for everyday shoes, sports shoes, or something more formal?";
+      let purposePrompt = "What kind of shoes are you looking for — casual, sporty, or formal?";
       if (updates?.isCorrection && updates?.size) {
-        purposePrompt = `Got it, size ${state.size}. Are you looking for everyday shoes, sports shoes, or something more formal?`;
+        purposePrompt = `Got it, size ${state.size}. What kind of shoes are you looking for — casual, sporty, or formal?`;
       } else if (updates?.size && (wearer?.relation === "sister" || wearer?.relation === "daughter" || wearer?.relation === "mother" || wearer?.relation === "wife")) {
         purposePrompt = `Perfect, size ${state.size}. Is she looking for something casual, sporty, or formal?`;
       } else if (updates?.size && (wearer?.relation === "brother" || wearer?.relation === "son" || wearer?.relation === "father" || wearer?.relation === "husband")) {
@@ -1040,7 +1085,7 @@ export class ShoppingAssistantService {
       } else if (updates?.size && (wearer?.relation === "friend" || wearer?.type === "OTHER")) {
         purposePrompt = `Perfect, size ${state.size}. Are they looking for something casual, sporty, or formal?`;
       } else if (updates?.size && !isChild) {
-        purposePrompt = `Perfect, size ${state.size}. Are you after something casual, sporty, or formal?`;
+        purposePrompt = `Perfect, size ${state.size}. What kind are you after — casual, sporty, or formal?`;
       } else if (isChild) {
         purposePrompt = "Are they for everyday wear or sports?";
       }
@@ -1050,7 +1095,7 @@ export class ShoppingAssistantService {
         nextQuestion: {
           field: "PURPOSE",
           type: "CHOICE",
-          options: isChild ? ["Everyday", "Sports"] : ["Everyday", "Sports", "Formal"],
+          options: isChild ? ["Everyday", "Sports"] : ["Casual", "Sporty", "Formal"],
         },
         replyMessage: purposePrompt,
         canSearchCatalog: false,
@@ -1784,6 +1829,17 @@ export class ShoppingAssistantService {
       if (ageMatch) {
         updates.age = parseInt(ageMatch[1], 10);
         updates.wearerType = updates.age <= 12 ? "CHILD" : "OTHER";
+      }
+    }
+
+    // Post-process: Re-evaluate gender for child-capable relations when age is now known
+    if (updates.age !== null && updates.age !== undefined && updates.age <= 12 && updates.wearerRelation) {
+      if (["daughter", "sister"].includes(updates.wearerRelation)) {
+        updates.gender = "GIRLS";
+        updates.wearerType = "CHILD";
+      } else if (["son", "brother"].includes(updates.wearerRelation)) {
+        updates.gender = "BOYS";
+        updates.wearerType = "CHILD";
       }
     }
 
