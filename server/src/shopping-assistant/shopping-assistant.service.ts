@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { ChatMessageRole, Prisma, ProductGender } from "@prisma/client";
-import { GoogleGenAI, Type } from "@google/genai";
+import Groq from "groq-sdk";
 import { PrismaService } from "../prisma/prisma.service";
 import type { AuthenticatedUser } from "../auth/auth.types";
 import { ChatRequestDto } from "./dto/chat-request.dto";
@@ -83,7 +83,7 @@ CRITICAL RULES:
 @Injectable()
 export class ShoppingAssistantService {
   private readonly logger = new Logger(ShoppingAssistantService.name);
-  private readonly aiClient: GoogleGenAI | null = null;
+  private readonly groq: Groq | null = null;
   private readonly modelName: string;
 
   constructor(
@@ -91,23 +91,23 @@ export class ShoppingAssistantService {
     private readonly prisma: PrismaService,
   ) {
     const apiKey =
+      this.configService.get<string>("GROQ_API_KEY") ||
       this.configService.get<string>("SHOPPING_ASSISTANT_API_KEY") ||
-      this.configService.get<string>("GEMINI_API_KEY") ||
+      process.env.GROQ_API_KEY ||
       process.env.SHOPPING_ASSISTANT_API_KEY ||
-      process.env.GEMINI_API_KEY ||
       "";
 
     this.modelName =
       this.configService.get<string>("SHOPPING_ASSISTANT_MODEL") ||
       process.env.SHOPPING_ASSISTANT_MODEL ||
-      "gemini-3.7-flash";
+      "llama-3.3-70b-versatile";
 
     if (apiKey) {
-      this.aiClient = new GoogleGenAI({ apiKey });
-      this.logger.log(`Initialized Shopping Assistant LLM with model: ${this.modelName}`);
+      this.groq = new Groq({ apiKey });
+      this.logger.log(`Initialized Shopping Assistant LLM with Groq model: ${this.modelName}`);
     } else {
       this.logger.warn(
-        "SHOPPING_ASSISTANT_API_KEY or GEMINI_API_KEY not configured. Fast local deterministic mode enabled.",
+        "GROQ_API_KEY or SHOPPING_ASSISTANT_API_KEY not configured. Fast local deterministic mode enabled.",
       );
     }
   }
@@ -165,114 +165,81 @@ export class ShoppingAssistantService {
     const currentPreferences = this.sanitizePreferences(dto.preferences);
     const currentPendingQuestion = dto.pendingQuestion || null;
 
-    // Step 1: Single Gemini Call per turn with Fast Path Optimization (Phase 4 Step 35)
+    // Step 1: Single Groq Call per turn with Fast Path Optimization (Phase 4 Step 35)
     let extractedUpdates: ExtractedDeltaUpdates;
 
     const isSimpleFastPath = this.canUseFastPath(userMessage, currentPendingQuestion, currentPreferences);
 
     // ── DEBUG INSTRUMENTATION (development only) ──
     const isDev = process.env.NODE_ENV === "development";
-    let debugGeminiUsed = false;
-    let debugGeminiLatencyMs = 0;
-    let debugRawGeminiOutput: any = null;
-    let debugResponseSource: "FAST_PATH" | "GEMINI_EXTRACTION" | "GEMINI_FALLBACK" | "NO_AI_CLIENT" = "FAST_PATH";
+    let debugGroqUsed = false;
+    let debugGroqLatencyMs = 0;
+    let debugRawGroqOutput: any = null;
+    let debugResponseSource: "FAST_PATH" | "GROQ_EXTRACTION" | "GROQ_FALLBACK" | "NO_AI_CLIENT" = "FAST_PATH";
     // ── END DEBUG VARS ──
 
-    if (!this.aiClient || isSimpleFastPath) {
+    if (!this.groq || isSimpleFastPath) {
       extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
-      debugResponseSource = !this.aiClient ? "NO_AI_CLIENT" : "FAST_PATH";
+      debugResponseSource = !this.groq ? "NO_AI_CLIENT" : "FAST_PATH";
       if (isDev) {
-        this.logger.debug(`[GEMINI_SKIPPED] reason=${debugResponseSource} | message="${userMessage}" | fastPath=${isSimpleFastPath} | aiClient=${!!this.aiClient}`);
+        this.logger.debug(`[GROQ_SKIPPED] reason=${debugResponseSource} | message="${userMessage}" | fastPath=${isSimpleFastPath} | aiClient=${!!this.groq}`);
       }
     } else {
       try {
-        const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+        const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+          {
+            role: "system",
+            content: `${EXTRACTION_SYSTEM_INSTRUCTION}\n\nIMPORTANT: You must respond in a valid JSON object matching the requested schema.\nCurrent Known Preferences State: ${JSON.stringify(currentPreferences)}\nCurrent Pending Question: ${JSON.stringify(currentPendingQuestion)}`,
+          },
+        ];
 
         for (const msg of history) {
           if (!msg.content?.trim()) continue;
-          contents.push({
-            role: msg.role === "assistant" ? "model" : "user",
-            parts: [{ text: msg.content.trim() }],
+          messages.push({
+            role: msg.role === "assistant" ? "assistant" : "user",
+            content: msg.content.trim(),
           });
         }
 
-        contents.push({
+        messages.push({
           role: "user",
-          parts: [{ text: userMessage }],
+          content: userMessage,
         });
 
-        const stateContextPrompt = `${EXTRACTION_SYSTEM_INSTRUCTION}\n\nCurrent Known Preferences State: ${JSON.stringify(currentPreferences)}\nCurrent Pending Question: ${JSON.stringify(currentPendingQuestion)}`;
-
         if (isDev) {
-          this.logger.debug(`[GEMINI_CALL_START] message="${userMessage}" | model=${this.modelName} | historyTurns=${contents.length}`);
+          this.logger.debug(`[GROQ_CALL_START] message="${userMessage}" | model=${this.modelName} | historyTurns=${messages.length}`);
         }
-        const geminiCallStart = Date.now();
+        const groqCallStart = Date.now();
 
-        const responsePromise = this.aiClient.models.generateContent({
+        const responsePromise = this.groq.chat.completions.create({
           model: this.modelName,
-          contents,
-          config: {
-            systemInstruction: stateContextPrompt,
-            responseMimeType: "application/json",
-            temperature: 0.2,
-            maxOutputTokens: 300,
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                intent: { type: Type.STRING, nullable: true },
-                wearerType: { type: Type.STRING, nullable: true },
-                wearerRelation: { type: Type.STRING, nullable: true },
-                age: { type: Type.NUMBER, nullable: true },
-                gender: { type: Type.STRING, nullable: true },
-                size: { type: Type.STRING, nullable: true },
-                purpose: { type: Type.STRING, nullable: true },
-                budgetMin: { type: Type.NUMBER, nullable: true },
-                budgetMax: { type: Type.NUMBER, nullable: true },
-                brand: { type: Type.STRING, nullable: true },
-                color: { type: Type.STRING, nullable: true },
-                style: { type: Type.STRING, nullable: true },
-                comfort: { type: Type.STRING, nullable: true },
-                isAmbiguousAffirmation: { type: Type.BOOLEAN, nullable: true },
-                isAffirmativeRelaxation: { type: Type.BOOLEAN, nullable: true },
-                isNewWearerContext: { type: Type.BOOLEAN, nullable: true },
-                isCorrection: { type: Type.BOOLEAN, nullable: true },
-                isProactiveSuggestionRequest: { type: Type.BOOLEAN, nullable: true },
-                language: {
-                  type: Type.OBJECT,
-                  nullable: true,
-                  properties: {
-                    acknowledgement: { type: Type.STRING, nullable: true },
-                    question: { type: Type.STRING, nullable: true },
-                    naturalReply: { type: Type.STRING, nullable: true },
-                  },
-                },
-              },
-            },
-          },
+          messages,
+          temperature: 0.2,
+          response_format: { type: "json_object" },
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("LLM request timed out after 10s")), 10000),
+          setTimeout(() => reject(new Error("LLM request timed out after 3s")), 3000),
         );
 
-        const result = await Promise.race([responsePromise, timeoutPromise]);
-        const rawText = result.text;
+        const completion = await Promise.race([responsePromise, timeoutPromise]);
+        const rawText = completion.choices[0]?.message?.content;
 
-        debugGeminiLatencyMs = Date.now() - geminiCallStart;
-        debugGeminiUsed = true;
-        debugResponseSource = "GEMINI_EXTRACTION";
+        debugGroqLatencyMs = Date.now() - groqCallStart;
+        debugGroqUsed = true;
+        debugResponseSource = "GROQ_EXTRACTION";
 
         if (!rawText) {
           throw new Error("Empty response from LLM");
         }
 
         const parsed = JSON.parse(rawText);
-        debugRawGeminiOutput = parsed;
+        debugRawGroqOutput = parsed;
 
         if (isDev) {
-          this.logger.debug(`[GEMINI_CALL_SUCCESS] latency=${debugGeminiLatencyMs}ms | rawOutput=${JSON.stringify(parsed)}`);
+          this.logger.debug(`[GROQ_CALL_SUCCESS] latency=${debugGroqLatencyMs}ms | tokens=${completion.usage?.total_tokens ?? 0} | rawOutput=${JSON.stringify(parsed)}`);
           if (parsed.language?.naturalReply) {
-            this.logger.debug(`[GEMINI_LANGUAGE] naturalReply="${parsed.language.naturalReply}"`);
+            this.logger.debug(`[GROQ_LANGUAGE] naturalReply="${parsed.language.naturalReply}"`);
           }
         }
 
@@ -280,9 +247,9 @@ export class ShoppingAssistantService {
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
         this.logger.error(`Shopping Assistant LLM extraction error: ${errorMsg}`);
-        debugResponseSource = "GEMINI_FALLBACK";
+        debugResponseSource = "GROQ_FALLBACK";
         if (isDev) {
-          this.logger.debug(`[GEMINI_CALL_FAILED] error="${errorMsg}" | fallingBack=true`);
+          this.logger.debug(`[GROQ_CALL_FAILED] error="${errorMsg}" | fallingBack=true`);
         }
         extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
       }
@@ -484,7 +451,7 @@ export class ShoppingAssistantService {
 
     if (isDev) {
       this.logger.debug(
-        `[CHAT_TELEMETRY] message="${userMessage}" | geminiUsed=${debugGeminiUsed} | latency=${debugGeminiLatencyMs}ms | source=${policyResult.canSearchCatalog ? "DATABASE_LOGIC" : debugGeminiUsed ? "GEMINI_GENERATED" : "DETERMINISTIC_RULE"} | rawGemini=${JSON.stringify(debugRawGeminiOutput?.language?.naturalReply || null)} | finalResponse="${finalResponse.message}"`,
+        `[CHAT_TELEMETRY] message="${userMessage}" | groqUsed=${debugGroqUsed} | latency=${debugGroqLatencyMs}ms | source=${policyResult.canSearchCatalog ? "DATABASE_LOGIC" : debugGroqUsed ? "GROQ_GENERATED" : "DETERMINISTIC_RULE"} | rawGroq=${JSON.stringify(debugRawGroqOutput?.language?.naturalReply || null)} | finalResponse="${finalResponse.message}"`,
       );
     }
 

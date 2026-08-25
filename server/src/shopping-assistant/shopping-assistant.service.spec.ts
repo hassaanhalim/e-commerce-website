@@ -301,7 +301,7 @@ describe('ShoppingAssistantService — Deterministic Logic', () => {
   // TEST GROUP 5: Fast-Path Coverage
   // ══════════════════════════════════════════════════════════════
 
-  describe('Issue 3: Gemini natural routing & streamlined fast-path', () => {
+  describe('Issue 3: Groq natural routing & streamlined fast-path', () => {
     test('5.1 "42" with SIZE pending is fast-path (button click)', () => {
       const result = (service as any).canUseFastPath('42', { field: 'SIZE', type: 'SIZE' }, {});
       expect(result).toBe(true);
