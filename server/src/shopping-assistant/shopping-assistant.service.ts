@@ -170,8 +170,20 @@ export class ShoppingAssistantService {
 
     const isSimpleFastPath = this.canUseFastPath(userMessage, currentPendingQuestion, currentPreferences);
 
+    // ── DEBUG INSTRUMENTATION (development only) ──
+    const isDev = process.env.NODE_ENV === "development";
+    let debugGeminiUsed = false;
+    let debugGeminiLatencyMs = 0;
+    let debugRawGeminiOutput: any = null;
+    let debugResponseSource: "FAST_PATH" | "GEMINI_EXTRACTION" | "GEMINI_FALLBACK" | "NO_AI_CLIENT" = "FAST_PATH";
+    // ── END DEBUG VARS ──
+
     if (!this.aiClient || isSimpleFastPath) {
       extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
+      debugResponseSource = !this.aiClient ? "NO_AI_CLIENT" : "FAST_PATH";
+      if (isDev) {
+        this.logger.debug(`[GEMINI_SKIPPED] reason=${debugResponseSource} | message="${userMessage}" | fastPath=${isSimpleFastPath} | aiClient=${!!this.aiClient}`);
+      }
     } else {
       try {
         const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
@@ -190,6 +202,11 @@ export class ShoppingAssistantService {
         });
 
         const stateContextPrompt = `${EXTRACTION_SYSTEM_INSTRUCTION}\n\nCurrent Known Preferences State: ${JSON.stringify(currentPreferences)}\nCurrent Pending Question: ${JSON.stringify(currentPendingQuestion)}`;
+
+        if (isDev) {
+          this.logger.debug(`[GEMINI_CALL_START] message="${userMessage}" | model=${this.modelName} | historyTurns=${contents.length}`);
+        }
+        const geminiCallStart = Date.now();
 
         const responsePromise = this.aiClient.models.generateContent({
           model: this.modelName,
@@ -235,21 +252,38 @@ export class ShoppingAssistantService {
         });
 
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("LLM request timed out after 5s")), 5000),
+          setTimeout(() => reject(new Error("LLM request timed out after 10s")), 10000),
         );
 
         const result = await Promise.race([responsePromise, timeoutPromise]);
         const rawText = result.text;
+
+        debugGeminiLatencyMs = Date.now() - geminiCallStart;
+        debugGeminiUsed = true;
+        debugResponseSource = "GEMINI_EXTRACTION";
 
         if (!rawText) {
           throw new Error("Empty response from LLM");
         }
 
         const parsed = JSON.parse(rawText);
+        debugRawGeminiOutput = parsed;
+
+        if (isDev) {
+          this.logger.debug(`[GEMINI_CALL_SUCCESS] latency=${debugGeminiLatencyMs}ms | rawOutput=${JSON.stringify(parsed)}`);
+          if (parsed.language?.naturalReply) {
+            this.logger.debug(`[GEMINI_LANGUAGE] naturalReply="${parsed.language.naturalReply}"`);
+          }
+        }
+
         extractedUpdates = this.normalizeExtractedUpdates(parsed, userMessage, currentPendingQuestion, currentPreferences);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
         this.logger.error(`Shopping Assistant LLM extraction error: ${errorMsg}`);
+        debugResponseSource = "GEMINI_FALLBACK";
+        if (isDev) {
+          this.logger.debug(`[GEMINI_CALL_FAILED] error="${errorMsg}" | fallingBack=true`);
+        }
         extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
       }
     }
@@ -448,6 +482,12 @@ export class ShoppingAssistantService {
     const durationMs = Date.now() - startTime;
     this.logger.log(`Shopping Assistant turn completed in ${durationMs}ms`);
 
+    if (isDev) {
+      this.logger.debug(
+        `[CHAT_TELEMETRY] message="${userMessage}" | geminiUsed=${debugGeminiUsed} | latency=${debugGeminiLatencyMs}ms | source=${policyResult.canSearchCatalog ? "DATABASE_LOGIC" : debugGeminiUsed ? "GEMINI_GENERATED" : "DETERMINISTIC_RULE"} | rawGemini=${JSON.stringify(debugRawGeminiOutput?.language?.naturalReply || null)} | finalResponse="${finalResponse.message}"`,
+      );
+    }
+
     return finalResponse;
   }
 
@@ -464,64 +504,8 @@ export class ShoppingAssistantService {
     // 1. Size answers (pure numeric)
     if (pendingQuestion?.field === "SIZE" && /^\d{1,2}$/.test(text)) return true;
 
-    // 2. Wearer self/other answers
-    if (
-      pendingQuestion?.field === "WEARER" &&
-      ["for me", "me", "myself", "for someone else", "someone else", "someone"].includes(text)
-    ) {
-      return true;
-    }
-
-    // 3. Wearer relation answers
-    if (
-      pendingQuestion?.field === "WEARER_RELATION" &&
-      [
-        "my sister", "sister", "my brother", "brother", "my daughter", "daughter",
-        "my son", "son", "my wife", "wife", "my husband", "husband",
-        "my mother", "mother", "mom", "my father", "father", "dad",
-        "a friend", "friend", "my friend"
-      ].includes(text)
-    ) {
-      return true;
-    }
-
-    // 4. Relaxation prompt answers
-    if (
-      pendingQuestion?.field === "RELAX_PURPOSE" &&
-      (["yes", "yeah", "yep", "sure", "ok", "no", "nope", "nah", "casual", "show casual"].includes(text) ||
-        text.includes("casual is fine") ||
-        text.includes("yeah casual"))
-    ) {
-      return true;
-    }
-
-    // 5. Purpose answers (when asking for purpose)
-    if (
-      pendingQuestion?.field === "PURPOSE" &&
-      ["casual", "sports", "sporty", "formal", "everyday", "running", "gym", "athletic"].includes(text)
-    ) {
-      return true;
-    }
-
-    // 6. Age answers (when asking for age)
-    if (pendingQuestion?.field === "AGE" && /^\d{1,2}(?:\s*(?:years?(?:\s*old)?|yo|yr))?$/i.test(text)) {
-      return true;
-    }
-
-    // 7. Choice answers (yes/no/specific options)
-    if (pendingQuestion?.type === "CHOICE" && ["yes", "no", "casual", "sports", "formal", "everyday", "sporty"].includes(text)) return true;
-
-    // 8. Boolean confirmations
+    // 2. Boolean confirmations (e.g. clicking yes/no chip)
     if (pendingQuestion?.type === "BOOLEAN" && ["yes", "yeah", "yep", "sure", "ok", "no", "nope", "nah"].includes(text)) return true;
-
-    // 9. Gender-only messages (no pending question required)
-    if (["men", "women", "men shoes", "men's shoes", "women shoes", "women's shoes", "for men", "for women"].includes(text)) return true;
-
-    // 10. Direct brand mentions (common known brands)
-    if (/^(?:show\s+)?(?:nike|adidas|puma|reebok|asics|new\s*balance|skechers)$/i.test(text)) return true;
-
-    // 11. Budget refinement ("cheaper", "something cheaper", "under XXXX")
-    if (text === "cheaper" || text === "something cheaper" || /^under\s+\d+$/.test(text)) return true;
 
     return false;
   }
@@ -534,7 +518,7 @@ export class ShoppingAssistantService {
     action: NextAction | null | undefined,
     state: ShoppingPreferences,
   ): boolean {
-    if (!text || text.length < 5 || text.length > 350) return false;
+    if (!text || text.length < 5 || text.length > 450) return false;
     const textLower = text.toLowerCase();
 
     // 1. PRODUCT-CLAIM GUARD: Never allow unsupported specific product claims or pricing in conversational text
@@ -546,37 +530,13 @@ export class ShoppingAssistantService {
       if (textLower.includes(claim)) return false;
     }
 
-    // 2. ACTION ALIGNMENT GUARD
-    switch (action) {
-      case "ASK_SIZE":
-        return textLower.includes("size") || textLower.includes("fit");
-      case "ASK_PURPOSE":
-        return (
-          textLower.includes("everyday") ||
-          textLower.includes("sports") ||
-          textLower.includes("formal") ||
-          textLower.includes("casual") ||
-          textLower.includes("running") ||
-          textLower.includes("style") ||
-          textLower.includes("kind") ||
-          textLower.includes("type") ||
-          textLower.includes("after")
-        );
-      case "ASK_AGE":
-        return textLower.includes("old") || textLower.includes("age");
-      case "ASK_WEARER":
-        return textLower.includes("for you") || textLower.includes("someone else") || textLower.includes("who");
-      case "ASK_WEARER_RELATION":
-        return textLower.includes("who") || textLower.includes("for") || textLower.includes("they") || textLower.includes("person") || textLower.includes("someone");
-      case "CLARIFY_PURPOSE":
-        return textLower.includes("which") || textLower.includes("prefer") || textLower.includes("casual") || textLower.includes("sports");
-      case "CLARIFY_INPUT":
-        return textLower.includes("eu") || textLower.includes("us") || textLower.includes("uk") || textLower.includes("size");
-      case "OFF_TOPIC_REDIRECT":
-        return textLower.includes("shoe") || textLower.includes("footwear");
-      default:
-        return true;
+    // 2. OFF-TOPIC GUARD: If the action is off-topic redirect, must mention shoes/footwear
+    if (action === "OFF_TOPIC_REDIRECT") {
+      return textLower.includes("shoe") || textLower.includes("footwear");
     }
+
+    // 3. Conversational responses that pass the claim guard and are helpful are valid
+    return true;
   }
 
   /**
@@ -849,6 +809,26 @@ export class ShoppingAssistantService {
         },
         replyMessage:
           "I'm focused on helping with shoes here. What kind of footwear are you looking for?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 1b. Standalone Greetings ("hi", "hello", "hey")
+    if (
+      ["hi", "hello", "hey", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower) &&
+      !state.size &&
+      !state.purpose &&
+      !state.brand
+    ) {
+      return {
+        nextAction: "ASK_PURPOSE",
+        nextQuestion: {
+          field: "PURPOSE",
+          type: "CHOICE",
+          options: ["Casual sneakers", "Running shoes", "Formal shoes"],
+        },
+        replyMessage:
+          "Hello! I can help you find the right pair of shoes. What kind of footwear are you looking for today — casual sneakers, running shoes, or something formal?",
         canSearchCatalog: false,
       };
     }
@@ -1792,7 +1772,10 @@ export class ShoppingAssistantService {
       textLower.includes("myself") ||
       textLower.includes("for me") ||
       textLower.includes("for self") ||
-      textLower.includes("buying shoes for myself")
+      textLower.includes("buying shoes for myself") ||
+      textLower === "me" ||
+      textLower === "for yo" ||
+      textLower === "for you"
     ) {
       updates.wearerType = "SELF";
       updates.wearerRelation = "myself";

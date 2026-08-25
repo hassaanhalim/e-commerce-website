@@ -301,75 +301,75 @@ describe('ShoppingAssistantService — Deterministic Logic', () => {
   // TEST GROUP 5: Fast-Path Coverage
   // ══════════════════════════════════════════════════════════════
 
-  describe('Issue 3: Fast-path coverage', () => {
-    test('5.1 "42" with SIZE pending is fast-path', () => {
+  describe('Issue 3: Gemini natural routing & streamlined fast-path', () => {
+    test('5.1 "42" with SIZE pending is fast-path (button click)', () => {
       const result = (service as any).canUseFastPath('42', { field: 'SIZE', type: 'SIZE' }, {});
       expect(result).toBe(true);
     });
 
-    test('5.2 "casual" with PURPOSE pending is fast-path', () => {
+    test('5.2 "casual" routes to Gemini (natural language processing)', () => {
       const result = (service as any).canUseFastPath('casual', { field: 'PURPOSE', type: 'CHOICE' }, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.3 "sporty" with PURPOSE pending is fast-path', () => {
+    test('5.3 "sporty" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('sporty', { field: 'PURPOSE', type: 'CHOICE' }, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.4 "someone else" with WEARER pending is fast-path', () => {
+    test('5.4 "someone else" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('someone else', { field: 'WEARER', type: 'CHOICE' }, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.5 "men" is fast-path (gender-only)', () => {
+    test('5.5 "men" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('men', null, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.6 "women" is fast-path (gender-only)', () => {
+    test('5.6 "women" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('women', null, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.7 "Nike" is fast-path (brand mention)', () => {
+    test('5.7 "Nike" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('Nike', null, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.8 "show Adidas" is fast-path', () => {
+    test('5.8 "show Adidas" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('show Adidas', null, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.9 "cheaper" is fast-path (budget refinement)', () => {
+    test('5.9 "cheaper" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('cheaper', null, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.10 "yes" with BOOLEAN pending is fast-path', () => {
+    test('5.10 "yes" with BOOLEAN pending is fast-path (chip click)', () => {
       const result = (service as any).canUseFastPath('yes', { field: 'RELAX_PURPOSE', type: 'BOOLEAN' }, {});
       expect(result).toBe(true);
     });
 
-    test('5.11 "6" with AGE pending is fast-path', () => {
+    test('5.11 "6" with AGE pending routes to Gemini', () => {
       const result = (service as any).canUseFastPath('6', { field: 'AGE', type: 'NUMBER' }, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.12 "6 years old" with AGE pending is fast-path', () => {
+    test('5.12 "6 years old" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('6 years old', { field: 'AGE', type: 'NUMBER' }, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
 
-    test('5.13 Complex multi-field message is NOT fast-path', () => {
+    test('5.13 Complex multi-field message routes to Gemini', () => {
       const result = (service as any).canUseFastPath('I want running shoes for my sister', null, {});
       expect(result).toBe(false);
     });
 
-    test('5.14 "under 20000" is fast-path (budget)', () => {
+    test('5.14 "under 20000" routes to Gemini', () => {
       const result = (service as any).canUseFastPath('under 20000', null, {});
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
 
