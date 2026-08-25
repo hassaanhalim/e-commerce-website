@@ -32,6 +32,7 @@ export interface ExtractedDeltaUpdates {
   rawSizeInput?: string | null;
   sizeSystemHint?: "US" | "UK" | "EU" | null;
   isAmbiguousSmallSize?: boolean;
+  isInvalidSize?: boolean;
   purpose?: ShoePurpose | null;
   budgetMin?: number | null;
   budgetMax?: number | null;
@@ -39,6 +40,9 @@ export interface ExtractedDeltaUpdates {
   color?: string | null;
   style?: string | null;
   comfort?: string | null;
+  comparedProducts?: string[];
+  orderNumber?: string | null;
+  storeInfoTopic?: "SHIPPING" | "RETURNS" | "PAYMENT" | "WARRANTY" | "SIZING" | "GENERAL" | null;
   clearedFields?: Array<"brand" | "color" | "budget" | "size" | "purpose">;
   isAmbiguousAffirmation?: boolean;
   isAffirmativeRelaxation?: boolean;
@@ -49,36 +53,41 @@ export interface ExtractedDeltaUpdates {
   language?: NaturalLanguagePayload | null;
 }
 
-const EXTRACTION_SYSTEM_INSTRUCTION = `You are a conversational shopping assistant for an online footwear store.
-Your job is to analyze the customer's message, extract newly mentioned or modified preferences, and generate a natural 1-2 sentence response.
+const EXTRACTION_SYSTEM_INSTRUCTION = `You are a production-grade conversational AI Shopping Agent for an online footwear store.
+Your job is to understand human conversation, answer store questions, track orders, assist with style choices, handle product comparisons, and extract shopping preferences.
 
 Guidelines:
-1. intent: "PRODUCT_DISCOVERY" | "PRODUCT_REFINEMENT" | "NEW_SHOPPING_CONTEXT" | "GENERAL_SHOE_HELP" | "OFF_TOPIC"
+1. intent: "GREETING" | "PRODUCT_DISCOVERY" | "PRODUCT_RECOMMENDATION" | "PRODUCT_COMPARISON" | "PRODUCT_QUESTION" | "STORE_INFORMATION" | "ORDER_SUPPORT" | "CASUAL_CONVERSATION" | "PRODUCT_REFINEMENT" | "NEW_SHOPPING_CONTEXT" | "GENERAL_SHOE_HELP" | "OFF_TOPIC"
 2. wearerType: "SELF" | "CHILD" | "OTHER" | null
 3. wearerRelation: "daughter", "son", "husband", "wife", "sister", "brother", "mother", "father", "friend", "myself", "child" | null
 4. age: number | null
 5. gender: "MEN" | "WOMEN" | "BOYS" | "GIRLS" | "UNISEX" | null
-6. size: numeric integer string (e.g. "42", "38", "39", "8") | null
+6. size: numeric integer string in EU sizing ("36" to "44") | null
 7. purpose: "EVERYDAY" | "SPORTS" | "RUNNING" | "GYM" | "FORMAL" | "CASUAL" | null
-8. budgetMax: maximum budget number | null
-9. budgetMin: minimum budget number | null
-10. brand: brand name | null
+8. budgetMax: maximum budget number (must be > 0) | null
+9. budgetMin: minimum budget number (must be >= 0) | null
+10. brand: brand name (e.g. "Nike", "Adidas", "Puma", "ASICS", "New Balance", "Reebok", "Skechers") | null
 11. color: color string | null
-12. isAmbiguousAffirmation: true if customer replied "yes", "no", "ok", "both" to a choice question
-13. isAffirmativeRelaxation: true if customer agreed to relax constraints (e.g. "yes", "sure", "show casual")
-14. isNewWearerContext: true if shopping for someone new (e.g. "for my daughter", "for my sister")
-15. isCorrection: true if correcting previous input ("I said 38 not 3838", "actually 39")
-16. isProactiveSuggestionRequest: true if asking for suggestions ("suggest me", "what do you have")
-17. language:
-    - acknowledgement: short acknowledgement of the newly shared fact (e.g. "Got it, men's shoes in size 38.")
-    - question: natural phrasing of the single next logical question
-    - naturalReply: complete 1-2 sentence response combining acknowledgement and question
+12. style: style description (e.g. "office and casual", "versatile sneakers", "leather formal", "slip-on") | null
+13. comfort: comfort requirements (e.g. "10 km daily walking", "cushioned arch support", "breathable") | null
+14. comparedProducts: array of product model names to compare (e.g. ["Nike Pegasus", "Adidas Ultraboost"]) | null
+15. orderNumber: extracted order tracking number or ID (e.g. "ORD-12345") | null
+16. storeInfoTopic: "SHIPPING" | "RETURNS" | "PAYMENT" | "WARRANTY" | "SIZING" | "GENERAL" | null
+17. isAmbiguousAffirmation: true if customer replied "yes", "no", "ok", "both" to a choice question
+18. isAffirmativeRelaxation: true if customer agreed to relax constraints (e.g. "yes", "sure", "show casual")
+19. isNewWearerContext: true if shopping for someone new (e.g. "for my daughter", "for my sister")
+20. isCorrection: true if correcting previous input ("I said 38 not 3838", "actually 39")
+21. isProactiveSuggestionRequest: true if asking for suggestions ("suggest me", "what do you have")
+22. language:
+    - acknowledgement: short acknowledgement of newly shared context or greeting
+    - question: natural phrasing of the single next logical question (if shopping), or empty if answering store info
+    - naturalReply: complete 1-2 sentence response. For Islamic greetings, reply "Wa Alaikum Assalam! ...". For general greetings, welcome warmly. For store info, summarize policy. For complex style requests, guide intelligently without demanding size first.
 
 CRITICAL RULES:
-- NEVER invent product names, specific shoe models, prices, discounts, or stock numbers in the language output.
-- Keep responses concise (1-2 sentences), friendly, and conversational.
-- Do NOT repeat greetings if the user already asked for a specific product.
-- Use natural pronouns based on wearer relation (daughter/sister/wife/mother -> she/her/your daughter/sister/wife, son/brother/husband/father -> he/him/your son/brother/husband).`;
+- NEVER invent product names, specific shoe models, prices, discounts, or stock numbers.
+- For Islamic greetings ("assalamualaikum"), respond with "Wa Alaikum Assalam! ...".
+- Keep responses concise (1-2 sentences), friendly, helpful, and conversational.
+- Use natural pronouns based on wearer relation (sister -> she/her/your sister, brother -> he/him/your brother).`;
 
 @Injectable()
 export class ShoppingAssistantService {
@@ -391,11 +400,44 @@ export class ShoppingAssistantService {
           products: [],
         };
       }
+    } else if (policyResult.mergedPreferences.nextAction === "ANSWER_STORE_INFO") {
+      let finalMessage = this.getStoreInformation(extractedUpdates.storeInfoTopic, userMessage);
+      if (extractedUpdates.language?.naturalReply && this.validateNaturalResponse(extractedUpdates.language.naturalReply, "ANSWER_STORE_INFO", policyResult.mergedPreferences)) {
+        finalMessage = extractedUpdates.language.naturalReply;
+      }
+      finalResponse = {
+        conversationId,
+        message: finalMessage,
+        preferences: policyResult.mergedPreferences,
+        pendingQuestion: null,
+        readyForRecommendations: false,
+        products: [],
+      };
+    } else if (policyResult.mergedPreferences.nextAction === "ANSWER_ORDER_STATUS") {
+      const orderMsg = await this.getOrderStatusMessage(extractedUpdates.orderNumber, user);
+      finalResponse = {
+        conversationId,
+        message: orderMsg,
+        preferences: policyResult.mergedPreferences,
+        pendingQuestion: extractedUpdates.orderNumber ? null : { field: "ORDER_ID", type: "FREE_TEXT" },
+        readyForRecommendations: false,
+        products: [],
+      };
+    } else if (policyResult.mergedPreferences.nextAction === "COMPARE_PRODUCTS") {
+      const comparison = await this.compareProducts(extractedUpdates.comparedProducts || []);
+      finalResponse = {
+        conversationId,
+        message: comparison.message,
+        preferences: policyResult.mergedPreferences,
+        pendingQuestion: { field: "SIZE", type: "SIZE" },
+        readyForRecommendations: comparison.products.length > 0,
+        products: comparison.products,
+      };
     } else {
       // Conversational question turn (Phase 3 Natural Phrasing with Action Validation Guard)
       let finalMessage = policyResult.replyMessage || "How can I help you find the right pair of shoes today?";
 
-      // Check if Gemini generated a valid natural reply that aligns with nextAction
+      // Check if LLM generated a valid natural reply that aligns with nextAction
       if (extractedUpdates.language?.naturalReply) {
         const candidate = extractedUpdates.language.naturalReply.trim();
         if (this.validateNaturalResponse(candidate, policyResult.mergedPreferences.nextAction, policyResult.mergedPreferences)) {
@@ -468,13 +510,197 @@ export class ShoppingAssistantService {
   ): boolean {
     const text = userMessage.trim().toLowerCase();
 
-    // 1. Size answers (pure numeric)
-    if (pendingQuestion?.field === "SIZE" && /^\d{1,2}$/.test(text)) return true;
+    // 1. Size answers (pure numeric) - ONLY if pendingQuestion is SIZE and value is in valid EU range 36..44
+    if (pendingQuestion?.field === "SIZE" && /^\d{1,2}$/.test(text)) {
+      const num = parseInt(text, 10);
+      if (num >= 36 && num <= 44) return true;
+    }
 
     // 2. Boolean confirmations (e.g. clicking yes/no chip)
     if (pendingQuestion?.type === "BOOLEAN" && ["yes", "yeah", "yep", "sure", "ok", "no", "nope", "nah"].includes(text)) return true;
 
     return false;
+  }
+
+  /**
+   * Store Information Tool: Grounded policy knowledge
+   */
+  public getStoreInformation(topic?: string | null, userMessage?: string): string {
+    const textLower = (userMessage || "").toLowerCase();
+
+    if (topic === "RETURNS" || textLower.includes("return") || textLower.includes("exchange") || textLower.includes("refund")) {
+      return "We offer a 14-day hassle-free return and exchange policy for unworn items in their original packaging with tags.";
+    }
+    if (topic === "SHIPPING" || textLower.includes("delivery") || textLower.includes("shipping") || textLower.includes("how long")) {
+      return "Standard delivery takes 2 to 4 business days across Pakistan. We offer free shipping on all orders over PKR 5,000.";
+    }
+    if (topic === "PAYMENT" || textLower.includes("pay") || textLower.includes("cod") || textLower.includes("cash on delivery") || textLower.includes("card")) {
+      return "We accept Cash on Delivery (COD), Credit/Debit Cards (Visa/Mastercard), and direct bank transfers at checkout.";
+    }
+    if (topic === "WARRANTY" || textLower.includes("warranty") || textLower.includes("guarantee") || textLower.includes("authentic")) {
+      return "All our products are 100% authentic and covered by a 30-day manufacturer defect warranty.";
+    }
+    if (topic === "SIZING" || textLower.includes("size chart") || textLower.includes("size guide") || textLower.includes("how to measure")) {
+      return "Our footwear uses standard European (EU) sizing from 36 to 44. You can also view our full Size Guide in the website menu.";
+    }
+    return "We offer 100% authentic footwear with 14-day returns, nationwide 2-4 day shipping, and Cash on Delivery. How can I assist you today?";
+  }
+
+  /**
+   * Order Status Tool: Query Prisma DB for authenticated user or order ID
+   */
+  public async getOrderStatusMessage(orderNumber?: string | null, user?: AuthenticatedUser): Promise<string> {
+    if (!orderNumber && !user) {
+      return "To track your order, please provide your Order Number (e.g. ORD-12345) or log in to view your orders directly.";
+    }
+
+    try {
+      let order: any = null;
+
+      if (orderNumber) {
+        order = await this.prisma.order.findFirst({
+          where: {
+            OR: [
+              { id: orderNumber },
+              { orderNumber: orderNumber },
+            ],
+            ...(user ? { userId: user.id } : {}),
+          },
+          include: {
+            items: true,
+          },
+        });
+      } else if (user) {
+        order = await this.prisma.order.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          include: {
+            items: true,
+          },
+        });
+      }
+
+      if (!order) {
+        return orderNumber
+          ? `I couldn't find an order matching "${orderNumber}". Please double-check your Order ID or check your email confirmation.`
+          : "You don't have any recent orders. Let me know if you need help finding shoes!";
+      }
+
+      const statusMap: Record<string, string> = {
+        PENDING: "pending processing",
+        CONFIRMED: "confirmed and being packed",
+        SHIPPED: "shipped and on the way",
+        DELIVERED: "delivered",
+        CANCELLED: "cancelled",
+        RETURNED: "returned",
+      };
+
+      const friendlyStatus = statusMap[order.status] || String(order.status).toLowerCase();
+      const itemCount = order.items?.length || 1;
+      const orderRef = order.orderNumber || order.id.slice(0, 8);
+
+      return `Order #${orderRef} with ${itemCount} item(s) is currently ${friendlyStatus}. Total: PKR ${Number(order.total).toLocaleString()}.`;
+    } catch (err) {
+      this.logger.error("Error looking up order status", err);
+      return "I encountered an issue looking up your order. Please check your Account Orders page or try again in a moment.";
+    }
+  }
+
+  /**
+   * Product Comparison Tool: Grounded DB comparison for requested shoe models
+   */
+  public async compareProducts(productNames: string[]): Promise<{ message: string; products: RecommendedProductDto[] }> {
+    if (!productNames || productNames.length < 2) {
+      return {
+        message: "Please specify two shoe models to compare (for example: Nike Pegasus vs Adidas Ultraboost).",
+        products: [],
+      };
+    }
+
+    try {
+      const results: any[] = [];
+      for (const name of productNames.slice(0, 3)) {
+        const found = await this.prisma.product.findFirst({
+          where: {
+            OR: [
+              { name: { contains: name, mode: "insensitive" } },
+              { slug: { contains: name.toLowerCase().replace(/\s+/g, "-") } },
+            ],
+            isActive: true,
+          },
+          include: {
+            brand: true,
+            category: true,
+            images: true,
+            variants: {
+              include: {
+                inventory: true,
+              },
+            },
+          },
+        });
+        if (found) results.push(found);
+      }
+
+      if (results.length === 0) {
+        return {
+          message: `I couldn't find ${productNames.join(" or ")} in our current catalog, but we have a wide selection of running, casual, and sports shoes. What style or size are you looking for?`,
+          products: [],
+        };
+      }
+
+      const dtos: RecommendedProductDto[] = results.map((p) => {
+        const inStockVariants = (p.variants || []).filter((v: any) => {
+          const onHand = v.inventory?.quantityOnHand ?? 0;
+          const reserved = v.inventory?.reservedQuantity ?? 0;
+          return onHand - reserved > 0;
+        });
+        const sizeSet = new Set<number>();
+        for (const v of inStockVariants) {
+          if (typeof v.size === "number") sizeSet.add(v.size);
+        }
+        const availableSizes: number[] = Array.from(sizeSet).sort((a: number, b: number) => a - b);
+        const primaryImg = p.images.find((img: any) => img.isPrimary) || p.images[0];
+        const pricing = this.calculateEffectivePrice(p.basePrice, p.salePrice);
+        return {
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          brand: p.brand.name,
+          category: p.category.name,
+          price: Number(p.basePrice),
+          originalPrice: pricing.originalPrice,
+          salePrice: p.salePrice ? Number(p.salePrice) : null,
+          displayPrice: pricing.displayPrice,
+          image: primaryImg?.url || "",
+          inStock: inStockVariants.length > 0,
+          availableSizes,
+        };
+      });
+
+      if (results.length === 1) {
+        const p1 = dtos[0];
+        return {
+          message: `We have the ${p1.brand} ${p1.name} in stock (${p1.category}) for PKR ${p1.displayPrice.toLocaleString()}. What shoe size would you like to check?`,
+          products: dtos,
+        };
+      }
+
+      const p1 = dtos[0];
+      const p2 = dtos[1];
+      const summary = `Comparing ${p1.brand} ${p1.name} (PKR ${p1.displayPrice.toLocaleString()}, ${p1.category}) and ${p2.brand} ${p2.name} (PKR ${p2.displayPrice.toLocaleString()}, ${p2.category}). Both are in stock! What size do you wear?`;
+
+      return {
+        message: summary,
+        products: dtos,
+      };
+    } catch (err) {
+      this.logger.error("Error comparing products", err);
+      return {
+        message: "I couldn't compare those products right now. What kind of shoes are you looking for?",
+        products: [],
+      };
+    }
   }
 
   /**
@@ -529,7 +755,63 @@ export class ShoppingAssistantService {
       return "OFF_TOPIC";
     }
 
-    // 2. New Shopping Context
+    // 2. Greeting
+    if (
+      /^(?:as[- ]?salam(?:u|o)?\s*(?:alaikum|alaykum|alekum)?|assalam\s*o\s*alaikum|salam|slam|aaoa)$/i.test(textLower) ||
+      textLower.startsWith("assalam") ||
+      textLower.startsWith("as-salam") ||
+      ["hi", "hello", "hey", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower)
+    ) {
+      if (!state.purpose && !state.size && !state.brand && !extracted?.purpose && !extracted?.brand) {
+        return "GREETING";
+      }
+    }
+
+    // 3. Store Information
+    if (
+      textLower.includes("return policy") ||
+      textLower.includes("return") ||
+      textLower.includes("refund") ||
+      textLower.includes("exchange") ||
+      textLower.includes("delivery") ||
+      textLower.includes("shipping") ||
+      textLower.includes("how long delivery") ||
+      textLower.includes("payment method") ||
+      textLower.includes("cash on delivery") ||
+      textLower.includes("warranty") ||
+      extracted?.storeInfoTopic
+    ) {
+      if (!state.size && !extracted?.size && !extracted?.purpose) {
+        return "STORE_INFORMATION";
+      }
+    }
+
+    // 4. Order Support
+    if (
+      textLower.includes("where is my order") ||
+      textLower.includes("track order") ||
+      textLower.includes("order status") ||
+      textLower.includes("my order") ||
+      extracted?.orderNumber
+    ) {
+      return "ORDER_SUPPORT";
+    }
+
+    // 5. Product Comparison
+    if (
+      textLower.includes(" vs ") ||
+      textLower.includes("compare ") ||
+      (extracted?.comparedProducts && extracted.comparedProducts.length >= 2)
+    ) {
+      return "PRODUCT_COMPARISON";
+    }
+
+    // 6. Casual Conversation
+    if (["thanks", "thank you", "nice", "cool", "great", "ok thanks", "awesome"].includes(textLower)) {
+      return "CASUAL_CONVERSATION";
+    }
+
+    // 7. New Shopping Context
     if (
       extracted?.isNewWearerContext ||
       textLower.includes("for my daughter") ||
@@ -549,7 +831,7 @@ export class ShoppingAssistantService {
       return "NEW_SHOPPING_CONTEXT";
     }
 
-    // 3. Product Refinement
+    // 8. Product Refinement
     if (
       extracted?.isCorrection ||
       textLower.includes("cheaper") ||
@@ -566,7 +848,22 @@ export class ShoppingAssistantService {
       return "PRODUCT_REFINEMENT";
     }
 
-    // 4. General Shoe Help
+    // 9. Product Recommendation / Style exploration
+    if (
+      textLower.includes("suit me") ||
+      textLower.includes("recommend") ||
+      textLower.includes("what shoes should i get") ||
+      textLower.includes("help me choose") ||
+      textLower.includes("10 km") ||
+      textLower.includes("walking") ||
+      textLower.includes("comfortable") ||
+      textLower.includes("office and casual") ||
+      textLower.includes("office but")
+    ) {
+      return "PRODUCT_RECOMMENDATION";
+    }
+
+    // 10. General Shoe Help
     if (
       textLower.includes("what size") ||
       textLower.includes("size chart") ||
@@ -575,8 +872,8 @@ export class ShoppingAssistantService {
       return "GENERAL_SHOE_HELP";
     }
 
-    // 5. Default: Product Discovery
-    return "PRODUCT_DISCOVERY";
+    // 11. Default: Product Discovery
+    return extracted?.intent || "PRODUCT_DISCOVERY";
   }
 
   /**
@@ -765,6 +1062,160 @@ export class ShoppingAssistantService {
   } {
     const textLower = userMessage.toLowerCase().trim();
 
+    // 0. Invalid size input (outside 36..44 EU, e.g. 67, 90, -1)
+    if (updates?.isInvalidSize) {
+      return {
+        nextAction: "ASK_SIZE",
+        nextQuestion: { field: "SIZE", type: "SIZE" },
+        replyMessage:
+          "I think that might not be a valid shoe size. Our catalog uses EU sizes from 36 to 44. What size do you usually wear?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 0b. Islamic Greetings ("assalamualaikum", "salam", "salam alaikum", etc.)
+    const isIslamicGreeting =
+      /^(?:as[- ]?salam(?:u|o)?\s*(?:alaikum|alaykum|alekum)?|assalam\s*o\s*alaikum|salam|slam|aaoa)$/i.test(textLower) ||
+      textLower.startsWith("assalam") ||
+      textLower.startsWith("as-salam") ||
+      textLower === "salam" ||
+      textLower === "slam";
+
+    if (
+      isIslamicGreeting &&
+      !state.size &&
+      !state.purpose &&
+      !state.brand &&
+      !updates?.purpose &&
+      !updates?.brand
+    ) {
+      return {
+        nextAction: "ASK_WEARER",
+        nextQuestion: { field: "WEARER", type: "CHOICE", options: ["For me", "For someone else"] },
+        replyMessage:
+          "Wa Alaikum Assalam! I can help you find the right shoes. Are you shopping for yourself or someone else?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 0c. General standalone greetings ("hi", "hello", "hey")
+    const isGeneralGreeting =
+      ["hi", "hello", "hey", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower) &&
+      !state.size &&
+      !state.purpose &&
+      !state.brand &&
+      !updates?.purpose &&
+      !updates?.brand;
+
+    if (isGeneralGreeting) {
+      return {
+        nextAction: "ASK_WEARER",
+        nextQuestion: { field: "WEARER", type: "CHOICE", options: ["For me", "For someone else"] },
+        replyMessage:
+          "Hello! I can help you find the right shoes. Are you shopping for yourself or someone else?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 0d. Store Information (Returns, Shipping, Payment, Warranty, Size Guide)
+    if (
+      state.intent === "STORE_INFORMATION" ||
+      updates?.storeInfoTopic ||
+      textLower.includes("return policy") ||
+      textLower.includes("return") ||
+      textLower.includes("refund") ||
+      textLower.includes("exchange") ||
+      textLower.includes("how long delivery") ||
+      textLower.includes("delivery takes") ||
+      textLower.includes("shipping") ||
+      textLower.includes("payment method") ||
+      textLower.includes("warranty")
+    ) {
+      if (!state.size && !updates?.size && !state.purpose && !updates?.purpose) {
+        return {
+          nextAction: "ANSWER_STORE_INFO",
+          nextQuestion: null,
+          replyMessage: this.getStoreInformation(updates?.storeInfoTopic, userMessage),
+          canSearchCatalog: false,
+        };
+      }
+    }
+
+    // 0e. Order Support & Tracking
+    if (
+      state.intent === "ORDER_SUPPORT" ||
+      updates?.orderNumber ||
+      textLower.includes("where is my order") ||
+      textLower.includes("track order") ||
+      textLower.includes("order status")
+    ) {
+      return {
+        nextAction: "ANSWER_ORDER_STATUS",
+        nextQuestion: updates?.orderNumber ? null : { field: "ORDER_ID", type: "FREE_TEXT" },
+        replyMessage: null,
+        canSearchCatalog: false,
+      };
+    }
+
+    // 0f. Product Comparison
+    if (
+      state.intent === "PRODUCT_COMPARISON" ||
+      (updates?.comparedProducts && updates.comparedProducts.length >= 2) ||
+      (textLower.includes(" vs ") && (textLower.includes("nike") || textLower.includes("adidas") || textLower.includes("pegasus") || textLower.includes("ultraboost") || textLower.includes("shoes")))
+    ) {
+      return {
+        nextAction: "COMPARE_PRODUCTS",
+        nextQuestion: { field: "SIZE", type: "SIZE" },
+        replyMessage: null,
+        canSearchCatalog: false,
+      };
+    }
+
+    // 0g. Casual Conversation
+    if (
+      state.intent === "CASUAL_CONVERSATION" ||
+      ["thanks", "thank you", "nice", "cool", "great", "ok thanks", "awesome"].includes(textLower)
+    ) {
+      return {
+        nextAction: "CASUAL_REPLY",
+        nextQuestion: null,
+        replyMessage: "You're very welcome! Let me know if you need any help finding shoes or checking styles.",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 0h. Style Guidance / Multi-purpose (Office and Casual weekends)
+    if (
+      (textLower.includes("office") && (textLower.includes("casual") || textLower.includes("weekend"))) ||
+      textLower.includes("versatile")
+    ) {
+      if (!state.size && !state.purpose) {
+        return {
+          nextAction: "ASK_PURPOSE",
+          nextQuestion: {
+            field: "PURPOSE",
+            type: "CHOICE",
+            options: ["Everyday sneakers", "Casual leather shoes", "Formal dress shoes"],
+          },
+          replyMessage: "I can help you find versatile shoes that work for office and casual wear. Are you looking for clean sneakers or something more formal?",
+          canSearchCatalog: false,
+        };
+      }
+    }
+
+    // 0i. High-mileage walking / Comfort (10 km daily walking)
+    if (
+      (textLower.includes("10 km") || textLower.includes("walking") || textLower.includes("walk a lot")) &&
+      !state.size
+    ) {
+      return {
+        nextAction: "ASK_SIZE",
+        nextQuestion: { field: "SIZE", type: "SIZE" },
+        replyMessage: "For walking 10 km daily, cushioned shoes with strong arch support are ideal. What shoe size should I look for in our walking and running collection?",
+        canSearchCatalog: false,
+      };
+    }
+
     // 1. Off-Topic Redirection
     if (state.intent === "OFF_TOPIC") {
       return {
@@ -776,26 +1227,6 @@ export class ShoppingAssistantService {
         },
         replyMessage:
           "I'm focused on helping with shoes here. What kind of footwear are you looking for?",
-        canSearchCatalog: false,
-      };
-    }
-
-    // 1b. Standalone Greetings ("hi", "hello", "hey")
-    if (
-      ["hi", "hello", "hey", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower) &&
-      !state.size &&
-      !state.purpose &&
-      !state.brand
-    ) {
-      return {
-        nextAction: "ASK_PURPOSE",
-        nextQuestion: {
-          field: "PURPOSE",
-          type: "CHOICE",
-          options: ["Casual sneakers", "Running shoes", "Formal shoes"],
-        },
-        replyMessage:
-          "Hello! I can help you find the right pair of shoes. What kind of footwear are you looking for today — casual sneakers, running shoes, or something formal?",
         canSearchCatalog: false,
       };
     }
@@ -1813,6 +2244,7 @@ export class ShoppingAssistantService {
         const beforeNotMatch = textLower.match(/(\d{1,2}(?:\.\d)?)\s*,?\s*not\s*\d+/i);
         const afterNotMatch = textLower.match(/not\s*\d+[,]?\s*(\d{1,2}(?:\.\d)?)/i);
         const saidCorrectionMatch = textLower.match(/(?:i said|actually|mean|meant)\s*(\d{1,2}(?:\.\d)?)/i);
+        const pureNumberMatch = textLower.match(/^(-?\d+(?:\.\d+)?)$/);
 
         if (beforeNotMatch) {
           candidateSize = beforeNotMatch[1];
@@ -1823,13 +2255,14 @@ export class ShoppingAssistantService {
         } else if (saidCorrectionMatch) {
           candidateSize = saidCorrectionMatch[1];
           updates.isCorrection = true;
+        } else if (pureNumberMatch) {
+          candidateSize = pureNumberMatch[1];
         } else if (parsed.size) {
           candidateSize = String(parsed.size);
         } else {
           const sizeMatch =
-            textLower.match(/(?:size|sz)\s*[:=]?\s*(\d{1,2}(?:\.\d)?)/i) ||
-            textLower.match(/(?:actually|try|change\s*to|make\s*it|wear)?\s*\b([3-9]|1[0-4]|2[0-9]|3[0-9]|4[0-9]|50)\b/i) ||
-            textLower.match(/^(\d{1,2})$/);
+            textLower.match(/(?:size|sz)\s*[:=]?\s*(-?\d+(?:\.\d+)?)/i) ||
+            textLower.match(/(?:actually|try|change\s*to|make\s*it|wear)?\s*\b([3-9]|1[0-4]|2[0-9]|3[0-9]|4[0-9]|50)\b/i);
           if (
             sizeMatch &&
             (pendingQuestion?.field === "SIZE" ||
@@ -1847,14 +2280,24 @@ export class ShoppingAssistantService {
         const num = parseFloat(candidateSize.trim());
         updates.rawSizeInput = candidateSize;
 
-        // Valid direct EU size (35 to 50)
-        if (!isNaN(num) && num >= 35 && num <= 50 && (!detectedSystemHint || detectedSystemHint === "EU")) {
+        // Valid direct EU size (36 to 44)
+        if (!isNaN(num) && num >= 36 && num <= 44 && (!detectedSystemHint || detectedSystemHint === "EU")) {
           updates.size = Math.round(num);
           updates.sizeSystemHint = "EU";
-        } else {
+          updates.isInvalidSize = false;
+        } else if (
+          (detectedSystemHint === "US" || detectedSystemHint === "UK") ||
+          (!isNaN(num) && num >= 4 && num <= 14 && detectedSystemHint !== "EU")
+        ) {
           // Ambiguous small size or non-EU sizing (e.g. 8, 7, US 8, UK 7): DO NOT SILENTLY CONVERT
           updates.size = null;
           updates.isAmbiguousSmallSize = true;
+          updates.isInvalidSize = false;
+        } else {
+          // Out of range or negative number (e.g. 67, 90, -1, 100, etc.)
+          updates.size = null;
+          updates.isInvalidSize = true;
+          updates.isAmbiguousSmallSize = false;
         }
       }
     }
@@ -1943,7 +2386,57 @@ export class ShoppingAssistantService {
       }
     }
 
-    // 6. Color Normalization
+    // 6. Style & Comfort Extraction
+    if (parsed.style) updates.style = parsed.style;
+    if (parsed.comfort) updates.comfort = parsed.comfort;
+    if (!updates.style && (textLower.includes("office and casual") || textLower.includes("office but") || textLower.includes("versatile"))) {
+      updates.style = "versatile office & casual";
+    }
+    if (!updates.comfort && (textLower.includes("10 km") || textLower.includes("walking") || textLower.includes("comfort"))) {
+      updates.comfort = "high-mileage walking comfort";
+    }
+
+    // 7. Product Comparison Extraction
+    if (Array.isArray(parsed.comparedProducts) && parsed.comparedProducts.length >= 2) {
+      updates.comparedProducts = parsed.comparedProducts;
+    } else if (textLower.includes(" vs ") || textLower.includes("compare ")) {
+      const compareMatch = textLower.match(/(?:compare\s+)?([a-z0-9\s]+?)\s+(?:vs\.?|and|with)\s+([a-z0-9\s]+)/i);
+      if (compareMatch) {
+        updates.comparedProducts = [compareMatch[1].trim(), compareMatch[2].trim()];
+      }
+    }
+
+    // 8. Order Number Extraction
+    if (parsed.orderNumber) {
+      updates.orderNumber = String(parsed.orderNumber).trim();
+    } else {
+      const orderMatch = textLower.match(/(?:order\s*#?|ord[-_]?)\s*([a-z0-9-]{4,36})/i);
+      if (orderMatch) {
+        updates.orderNumber = orderMatch[1].trim();
+      }
+    }
+
+    // 9. Store Information Topic Extraction
+    if (parsed.storeInfoTopic) {
+      updates.storeInfoTopic = parsed.storeInfoTopic;
+    } else if (textLower.includes("return") || textLower.includes("exchange") || textLower.includes("refund")) {
+      updates.storeInfoTopic = "RETURNS";
+    } else if (textLower.includes("delivery") || textLower.includes("shipping") || textLower.includes("how long")) {
+      updates.storeInfoTopic = "SHIPPING";
+    } else if (textLower.includes("payment") || textLower.includes("cod") || textLower.includes("cash on delivery") || textLower.includes("card")) {
+      updates.storeInfoTopic = "PAYMENT";
+    } else if (textLower.includes("warranty") || textLower.includes("guarantee") || textLower.includes("authentic")) {
+      updates.storeInfoTopic = "WARRANTY";
+    } else if (textLower.includes("size chart") || textLower.includes("size guide") || textLower.includes("how to measure")) {
+      updates.storeInfoTopic = "SIZING";
+    }
+
+    // 10. Budget & Age Sanity Bounds (reject negative budgets or impossible ages)
+    if (typeof updates.budgetMax === "number" && updates.budgetMax <= 0) updates.budgetMax = null;
+    if (typeof updates.budgetMin === "number" && updates.budgetMin < 0) updates.budgetMin = null;
+    if (typeof updates.age === "number" && (updates.age < 1 || updates.age > 100)) updates.age = null;
+
+    // 11. Color Normalization
     if (parsed.color) updates.color = parsed.color;
     const knownColors = ["black", "white", "blue", "red", "green", "grey", "brown", "beige", "navy"];
     for (const c of knownColors) {
@@ -1953,7 +2446,7 @@ export class ShoppingAssistantService {
       }
     }
 
-    // 7. Explicit Cleared Fields
+    // 12. Explicit Cleared Fields
     const cleared: Array<"brand" | "color" | "budget" | "size" | "purpose"> = [];
     if (textLower.includes("no brand") || textLower.includes("any brand") || textLower.includes("without brand")) {
       cleared.push("brand");
@@ -1968,7 +2461,7 @@ export class ShoppingAssistantService {
       updates.clearedFields = cleared;
     }
 
-    // 8. Ambiguity, Relaxation, and Proactive Suggestion flags
+    // 13. Ambiguity, Relaxation, and Proactive Suggestion flags
     updates.isAmbiguousAffirmation = Boolean(parsed.isAmbiguousAffirmation);
     updates.isAffirmativeRelaxation = Boolean(
       parsed.isAffirmativeRelaxation ||
@@ -1985,7 +2478,7 @@ export class ShoppingAssistantService {
         textLower.includes("what do you have"),
     );
 
-    // 9. Natural Language Phrasing Payload (Phase 3)
+    // 14. Natural Language Phrasing Payload (Phase 3)
     if (parsed.language && typeof parsed.language === "object") {
       updates.language = {
         acknowledgement: parsed.language.acknowledgement || null,
@@ -2027,6 +2520,11 @@ export class ShoppingAssistantService {
       if (!isNaN(parsedNum)) {
         cleanSize = parsedNum;
       }
+    }
+
+    // Only accept valid EU shoe sizes between 36 and 44
+    if (cleanSize !== null && (cleanSize < 36 || cleanSize > 44)) {
+      cleanSize = null;
     }
 
     return {

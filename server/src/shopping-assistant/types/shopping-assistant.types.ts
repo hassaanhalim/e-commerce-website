@@ -16,13 +16,21 @@ export type ShoePurpose =
   | "CASUAL";
 
 export type ChatIntent =
+  | "GREETING"
   | "PRODUCT_DISCOVERY"
+  | "PRODUCT_RECOMMENDATION"
+  | "PRODUCT_COMPARISON"
+  | "PRODUCT_QUESTION"
+  | "STORE_INFORMATION"
+  | "ORDER_SUPPORT"
+  | "CASUAL_CONVERSATION"
   | "PRODUCT_REFINEMENT"
   | "NEW_SHOPPING_CONTEXT"
   | "GENERAL_SHOE_HELP"
   | "OFF_TOPIC";
 
 export type NextAction =
+  | "GREET"
   | "ASK_WEARER"
   | "ASK_WEARER_RELATION"
   | "ASK_AGE"
@@ -32,6 +40,10 @@ export type NextAction =
   | "CLARIFY_PURPOSE"
   | "CLARIFY_INPUT"
   | "SEARCH_PRODUCTS"
+  | "COMPARE_PRODUCTS"
+  | "ANSWER_STORE_INFO"
+  | "ANSWER_ORDER_STATUS"
+  | "CASUAL_REPLY"
   | "OFFER_ALTERNATIVES"
   | "OFF_TOPIC_REDIRECT";
 
@@ -43,7 +55,7 @@ export type QuestionType =
   | "FREE_TEXT";
 
 export interface PendingQuestion {
-  field: "WEARER" | "WEARER_RELATION" | "AGE" | "SIZE" | "PURPOSE" | "BUDGET" | "RELAX_PURPOSE" | "CLARIFICATION" | "SIZE_SYSTEM";
+  field: "WEARER" | "WEARER_RELATION" | "AGE" | "SIZE" | "PURPOSE" | "BUDGET" | "RELAX_PURPOSE" | "CLARIFICATION" | "SIZE_SYSTEM" | "ORDER_ID" | "STORE_TOPIC";
   type?: QuestionType;
   options?: string[];
   promptText?: string;

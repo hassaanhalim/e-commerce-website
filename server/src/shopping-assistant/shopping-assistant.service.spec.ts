@@ -750,6 +750,50 @@ describe('ShoppingAssistantService — Deterministic Logic', () => {
       // Should not set size when AGE is pending
       expect(updates.size).toBeUndefined();
     });
+
+    test('11.7 "67" is rejected as out-of-bounds size and guides user to 36-44', () => {
+      const updates = extract('67', { field: 'SIZE', type: 'SIZE' });
+      expect(updates.size).toBeNull();
+      expect(updates.isInvalidSize).toBe(true);
+
+      const action = service.determineNextAction(emptyPrefs(), '67', { field: 'SIZE', type: 'SIZE' }, updates);
+      expect(action.nextAction).toBe('ASK_SIZE');
+      expect(action.replyMessage).toContain('36 to 44');
+    });
+
+    test('11.8 "90" is rejected as out-of-bounds size', () => {
+      const updates = extract('90', { field: 'SIZE', type: 'SIZE' });
+      expect(updates.size).toBeNull();
+      expect(updates.isInvalidSize).toBe(true);
+    });
+
+    test('11.9 "-1" is rejected as invalid negative size', () => {
+      const updates = extract('-1', { field: 'SIZE', type: 'SIZE' });
+      expect(updates.size).toBeNull();
+      expect(updates.isInvalidSize).toBe(true);
+    });
+
+    test('11.10 "42" is accepted as valid EU size 42', () => {
+      const updates = extract('42', { field: 'SIZE', type: 'SIZE' });
+      expect(updates.size).toBe(42);
+      expect(updates.isInvalidSize).toBe(false);
+      expect(updates.sizeSystemHint).toBe('EU');
+    });
+
+    test('11.11 "assalamualaikum" returns warm Islamic greeting without size prompt', () => {
+      const updates = extract('assalamualaikum');
+      const action = service.determineNextAction(emptyPrefs(), 'assalamualaikum', null, updates);
+      expect(action.nextAction).toBe('ASK_WEARER');
+      expect(action.replyMessage).toContain('Wa Alaikum Assalam');
+      expect(action.replyMessage).not.toContain('size');
+    });
+
+    test('11.12 "hi I need running shoes" extracts purpose=RUNNING for product discovery', () => {
+      const updates = extract('hi I need running shoes');
+      expect(updates.purpose).toBe('RUNNING');
+      const intent = service.classifyIntent('hi I need running shoes', emptyPrefs(), null, updates);
+      expect(intent).toBe('PRODUCT_DISCOVERY');
+    });
   });
 
   // ══════════════════════════════════════════════════════════════
@@ -928,4 +972,76 @@ describe('ShoppingAssistantService — Deterministic Logic', () => {
       expect(result.isOnSale).toBe(false);
     });
   });
+
+  // ══════════════════════════════════════════════════════════════
+  // TEST GROUP 15: AI Shopping Agent Core Capabilities (Phase 10)
+  // ══════════════════════════════════════════════════════════════
+
+  describe('AI Shopping Agent Core Capabilities', () => {
+    test('15.1 "Assalamualaikum" returns warm Islamic greeting', () => {
+      const updates = extract('Assalamualaikum');
+      const intent = service.classifyIntent('Assalamualaikum', emptyPrefs(), null, updates);
+      expect(intent).toBe('GREETING');
+      const action = service.determineNextAction(emptyPrefs(), 'Assalamualaikum', null, updates);
+      expect(action.nextAction).toBe('ASK_WEARER');
+      expect(action.replyMessage).toContain('Wa Alaikum Assalam');
+    });
+
+    test('15.2 "67" rejects invalid size with 36-44 guidance', () => {
+      const updates = extract('67', { field: 'SIZE', type: 'SIZE' });
+      expect(updates.size).toBeNull();
+      expect(updates.isInvalidSize).toBe(true);
+      const action = service.determineNextAction(emptyPrefs(), '67', { field: 'SIZE', type: 'SIZE' }, updates);
+      expect(action.nextAction).toBe('ASK_SIZE');
+      expect(action.replyMessage).toContain('36 to 44');
+    });
+
+    test('15.3 "I need shoes for office and casual weekends" extracts versatile style and asks purpose/style first', () => {
+      const updates = extract('I need shoes for office and casual weekends');
+      expect(updates.style).toBeDefined();
+      const action = service.determineNextAction(emptyPrefs(), 'I need shoes for office and casual weekends', null, updates);
+      expect(action.nextAction).toBe('ASK_PURPOSE');
+      expect(action.replyMessage).toContain('versatile');
+    });
+
+    test('15.4 "I walk 10 km daily" extracts walking and comfort requirement', () => {
+      const updates = extract('I walk 10 km daily');
+      expect(updates.comfort).toBeDefined();
+      const action = service.determineNextAction(emptyPrefs(), 'I walk 10 km daily', null, updates);
+      expect(action.nextAction).toBe('ASK_SIZE');
+      expect(action.replyMessage).toContain('10 km');
+    });
+
+    test('15.5 "Something like Nike Pegasus but cheaper" extracts brand Nike and intent refinement', () => {
+      const updates = extract('Something like Nike Pegasus but cheaper');
+      expect(updates.brand).toBe('Nike');
+      const intent = service.classifyIntent('Something like Nike Pegasus but cheaper', emptyPrefs(), null, updates);
+      expect(intent).toBe('PRODUCT_REFINEMENT');
+    });
+
+    test('15.6 "I need shoes for my sister" detects third-party shopper context', () => {
+      const updates = extract('I need shoes for my sister');
+      expect(updates.wearerRelation).toBe('sister');
+      expect(updates.gender).toBe('WOMEN');
+      expect(updates.wearerType).toBe('OTHER');
+    });
+
+    test('15.7 "What is your return policy?" returns grounded 14-day store policy', () => {
+      const updates = extract('What is your return policy?');
+      const intent = service.classifyIntent('What is your return policy?', emptyPrefs(), null, updates);
+      expect(intent).toBe('STORE_INFORMATION');
+      const action = service.determineNextAction(emptyPrefs(), 'What is your return policy?', null, updates);
+      expect(action.nextAction).toBe('ANSWER_STORE_INFO');
+      expect(action.replyMessage).toContain('14-day');
+    });
+
+    test('15.8 "Where is my order?" triggers order support flow', () => {
+      const updates = extract('Where is my order?');
+      const intent = service.classifyIntent('Where is my order?', emptyPrefs(), null, updates);
+      expect(intent).toBe('ORDER_SUPPORT');
+      const action = service.determineNextAction(emptyPrefs(), 'Where is my order?', null, updates);
+      expect(action.nextAction).toBe('ANSWER_ORDER_STATUS');
+    });
+  });
 });
+
