@@ -26,6 +26,26 @@ export class JwtAuthGuard implements CanActivate {
     const requestPath = request.originalUrl ?? request.url ?? request.path ?? "";
 
     if (isPublic || requestPath.startsWith("/api/docs")) {
+      const publicAccessToken = request.cookies?.[AUTH_ACCESS_COOKIE_NAME];
+      if (publicAccessToken) {
+        try {
+          const payload = await this.verifyPayload(publicAccessToken);
+          const user = await this.usersService.findById(payload.sub);
+          if (user && user.isActive && user.role === payload.role) {
+            const session = await this.usersService.findRefreshSessionById(payload.sid);
+            if (
+              session &&
+              session.userId === user.id &&
+              !session.revokedAt &&
+              session.expiresAt.getTime() > Date.now()
+            ) {
+              request.user = user;
+            }
+          }
+        } catch {
+          // Ignore invalid/expired tokens on public routes
+        }
+      }
       return true;
     }
 

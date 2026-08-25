@@ -95,7 +95,28 @@ export class OrdersService {
         throw new BadRequestException("Checkout session contains no items.");
       }
 
-      // 2. Revalidate Products & Variants
+      // 2. Revalidate Products, Variants & Inventory in Batch
+      const variantIds = session.items.map((item) => item.variantId);
+      const [variants, inventories] = await Promise.all([
+        tx.productVariant.findMany({
+          where: { id: { in: variantIds } },
+          include: {
+            product: {
+              include: {
+                images: { orderBy: { sortOrder: "asc" } },
+              },
+            },
+          },
+        }),
+        tx.inventory.findMany({
+          where: { variantId: { in: variantIds } },
+        }),
+      ]);
+
+      const variantMap = new Map(variants.map((v) => [v.id, v]));
+      const inventoryMap = new Map(inventories.map((inv) => [inv.variantId, inv]));
+
+      const orderNumber = this.generateOrderNumber();
       let calculatedSubtotal = new Decimal(0);
       const orderItemPayloads: Array<{
         productId: string;
@@ -112,18 +133,11 @@ export class OrdersService {
         lineTotal: Decimal;
       }> = [];
 
-      for (const item of session.items) {
-        const variant = await tx.productVariant.findUnique({
-          where: { id: item.variantId },
-          include: {
-            product: {
-              include: {
-                images: { orderBy: { sortOrder: "asc" } },
-              },
-            },
-          },
-        });
+      const adjustmentsData: Array<Prisma.InventoryAdjustmentCreateManyInput> = [];
+      const inventoryUpdates: Array<{ id: string; quantityOnHand: number; reservedQuantity: number }> = [];
 
+      for (const item of session.items) {
+        const variant = variantMap.get(item.variantId);
         if (!variant || !variant.isActive || !variant.product.isActive) {
           throw new BadRequestException(
             `Product variant "${item.productNameSnapshot}" is no longer available.`,
@@ -149,13 +163,53 @@ export class OrdersService {
           quantity: item.quantity,
           lineTotal,
         });
+
+        const inventory = inventoryMap.get(item.variantId);
+        if (!inventory) {
+          throw new BadRequestException(
+            `Inventory record missing for variant "${item.skuSnapshot}".`,
+          );
+        }
+
+        const quantityOnHand = inventory.quantityOnHand;
+        const reservedQuantity = inventory.reservedQuantity;
+        const qty = item.quantity;
+        const availableQuantity = Math.max(0, quantityOnHand - reservedQuantity);
+
+        if (quantityOnHand < qty) {
+          throw new BadRequestException(
+            `Insufficient stock for variant "${item.skuSnapshot}". Available: ${availableQuantity}, Requested: ${qty}`,
+          );
+        }
+
+        const afterOnHand = Math.max(0, quantityOnHand - qty);
+        const reservedDelta = reservedQuantity >= qty ? -qty : -reservedQuantity;
+        const afterReserved = Math.max(0, reservedQuantity - qty);
+
+        adjustmentsData.push({
+          inventoryId: inventory.id,
+          type: InventoryAdjustmentType.SALE,
+          onHandDelta: -qty,
+          reservedDelta,
+          beforeOnHand: quantityOnHand,
+          afterOnHand,
+          beforeReserved: reservedQuantity,
+          afterReserved,
+          reason: `Order ${orderNumber} created`,
+          performedById: userId,
+        });
+
+        inventoryUpdates.push({
+          id: inventory.id,
+          quantityOnHand: afterOnHand,
+          reservedQuantity: afterReserved,
+        });
       }
 
       const shippingAmount = new Decimal(session.shippingAmount);
       const discountAmount = new Decimal(session.discountAmount);
       const calculatedTotal = calculatedSubtotal.add(shippingAmount).sub(discountAmount);
 
-      const orderNumber = this.generateOrderNumber();
       const initialStatus =
         dto.paymentMethod === PaymentMethod.CASH_ON_DELIVERY
           ? OrderStatus.CONFIRMED
@@ -209,74 +263,28 @@ export class OrdersService {
         },
       });
 
-      // 4. Update Checkout Session -> CONSUMED
-      await tx.checkoutSession.update({
-        where: { id: session.id },
-        data: { status: CheckoutSessionStatus.CONSUMED },
-      });
-
-      // 5. Convert Reserved Inventory -> SALE (quantityOnHand - qty, reservedQuantity - qty)
-      for (const item of session.items) {
-        const inventory = await tx.inventory.findUnique({
-          where: { variantId: item.variantId },
-        });
-
-        if (!inventory) {
-          throw new BadRequestException(
-            `Inventory record missing for variant "${item.skuSnapshot}".`,
-          );
-        }
-
-        const quantityOnHand = inventory.quantityOnHand;
-        const reservedQuantity = inventory.reservedQuantity;
-        const qty = item.quantity;
-        const availableQuantity = Math.max(0, quantityOnHand - reservedQuantity);
-
-        if (quantityOnHand < qty) {
-          throw new BadRequestException(
-            `Insufficient stock for variant "${item.skuSnapshot}". Available: ${availableQuantity}, Requested: ${qty}`,
-          );
-        }
-
-        const afterOnHand = Math.max(0, quantityOnHand - qty);
-        const reservedDelta = reservedQuantity >= qty ? -qty : -reservedQuantity;
-        const afterReserved = Math.max(0, reservedQuantity - qty);
-
-        await tx.inventoryAdjustment.create({
-          data: {
-            inventoryId: inventory.id,
-            type: InventoryAdjustmentType.SALE,
-            onHandDelta: -qty,
-            reservedDelta,
-            beforeOnHand: quantityOnHand,
-            afterOnHand,
-            beforeReserved: reservedQuantity,
-            afterReserved,
-            reason: `Order ${orderNumber} created`,
-            performedById: userId,
-          },
-        });
-
-        await tx.inventory.update({
-          where: { id: inventory.id },
-          data: {
-            quantityOnHand: afterOnHand,
-            reservedQuantity: afterReserved,
-          },
-        });
-      }
-
-      // 6. Clear Customer Cart
-      const cart = await tx.cart.findUnique({
-        where: { userId },
-        select: { id: true },
-      });
-
-      if (cart) {
-        await tx.cartItem.deleteMany({
-          where: { cartId: cart.id },
-        });
-      }
+      // 4. Update Session, Adjustments, Inventory & Cart in Parallel
+      await Promise.all([
+        tx.checkoutSession.update({
+          where: { id: session.id },
+          data: { status: CheckoutSessionStatus.CONSUMED },
+        }),
+        adjustmentsData.length > 0
+          ? tx.inventoryAdjustment.createMany({ data: adjustmentsData })
+          : Promise.resolve(),
+        ...inventoryUpdates.map((u) =>
+          tx.inventory.update({
+            where: { id: u.id },
+            data: {
+              quantityOnHand: u.quantityOnHand,
+              reservedQuantity: u.reservedQuantity,
+            },
+          }),
+        ),
+        tx.cartItem.deleteMany({
+          where: { cart: { userId } },
+        }),
+      ]);
 
       return order;
     }, { maxWait: 10000, timeout: 25000 });

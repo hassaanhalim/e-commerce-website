@@ -28,6 +28,8 @@ export interface ProductQueryParams {
   isNew?: boolean;
   minPrice?: number;
   maxPrice?: number;
+  size?: number;
+  color?: string;
   sort?: "newest" | "price-asc" | "price-desc" | "name-asc" | "name-desc";
 }
 
@@ -137,6 +139,8 @@ export const catalogApi = {
     if (params.isNew !== undefined) query.set("isNew", String(params.isNew));
     if (params.minPrice !== undefined) query.set("minPrice", String(params.minPrice));
     if (params.maxPrice !== undefined) query.set("maxPrice", String(params.maxPrice));
+    if (params.size !== undefined) query.set("size", String(params.size));
+    if (params.color?.trim()) query.set("color", params.color.trim());
     if (params.sort) query.set("sort", params.sort);
 
     const queryString = query.toString();

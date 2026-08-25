@@ -119,10 +119,10 @@ export class CartService {
   }
 
   async getCart(userId: string) {
-    const cart = await this.getOrCreateCart(userId);
-
-    const fullCart = await this.prisma.cart.findUnique({
+    const fullCart = await this.prisma.cart.upsert({
       where: { userId },
+      update: {},
+      create: { userId },
       include: {
         items: {
           include: {
@@ -142,7 +142,7 @@ export class CartService {
       },
     });
 
-    const items = (fullCart?.items ?? []).map((item) =>
+    const items = (fullCart.items ?? []).map((item) =>
       this.serializeCartItem(item),
     );
 
@@ -150,7 +150,7 @@ export class CartService {
     const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
     return {
-      cartId: cart.id,
+      cartId: fullCart.id,
       items,
       subtotal: Math.round(subtotal * 100) / 100,
       itemCount,
@@ -233,9 +233,6 @@ export class CartService {
         });
       }
 
-      // Update cart updatedAt
-      await tx.cart.update({ where: { id: cart.id }, data: {} });
-
       return cartItem;
     });
 
@@ -312,23 +309,41 @@ export class CartService {
       return this.getCart(userId);
     }
 
+    const validGuestItems = dto.items.filter(
+      (item) => Number.isInteger(item.quantity) && item.quantity > 0,
+    );
+
+    if (validGuestItems.length === 0) {
+      return this.getCart(userId);
+    }
+
+    const variantIds = Array.from(new Set(validGuestItems.map((i) => i.variantId)));
+
     await this.prisma.$transaction(async (tx) => {
-      const cart = await tx.cart.upsert({
-        where: { userId },
-        update: {},
-        create: { userId },
+      const [cart, variants] = await Promise.all([
+        tx.cart.upsert({
+          where: { userId },
+          update: {},
+          create: { userId },
+        }),
+        tx.productVariant.findMany({
+          where: { id: { in: variantIds } },
+          include: { product: true, inventory: true },
+        }),
+      ]);
+
+      const existingItems = await tx.cartItem.findMany({
+        where: { cartId: cart.id, variantId: { in: variantIds } },
       });
 
-      for (const guestItem of dto.items) {
+      const variantMap = new Map(variants.map((v) => [v.id, v]));
+      const existingMap = new Map(existingItems.map((i) => [i.variantId, i]));
+
+      const operations: Promise<any>[] = [];
+
+      for (const guestItem of validGuestItems) {
         const { variantId, quantity } = guestItem;
-
-        if (!Number.isInteger(quantity) || quantity <= 0) continue;
-
-        // Validate variant silently – skip invalid ones
-        const variant = await tx.productVariant.findUnique({
-          where: { id: variantId },
-          include: { product: true, inventory: true },
-        });
+        const variant = variantMap.get(variantId);
 
         if (!variant || !variant.isActive || !variant.product.isActive) continue;
 
@@ -341,23 +356,28 @@ export class CartService {
         if (availableQuantity === 0) continue;
 
         const safeQuantity = Math.min(quantity, availableQuantity);
-
-        const existing = await tx.cartItem.findUnique({
-          where: { cartId_variantId: { cartId: cart.id, variantId } },
-        });
+        const existing = existingMap.get(variantId);
 
         if (existing) {
           const combined = existing.quantity + safeQuantity;
           const finalQuantity = Math.min(combined, availableQuantity);
-          await tx.cartItem.update({
-            where: { id: existing.id },
-            data: { quantity: finalQuantity },
-          });
+          operations.push(
+            tx.cartItem.update({
+              where: { id: existing.id },
+              data: { quantity: finalQuantity },
+            }),
+          );
         } else {
-          await tx.cartItem.create({
-            data: { cartId: cart.id, variantId, quantity: safeQuantity },
-          });
+          operations.push(
+            tx.cartItem.create({
+              data: { cartId: cart.id, variantId, quantity: safeQuantity },
+            }),
+          );
         }
+      }
+
+      if (operations.length > 0) {
+        await Promise.all(operations);
       }
     });
 

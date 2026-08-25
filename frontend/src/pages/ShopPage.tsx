@@ -161,23 +161,15 @@ export function ShopPage() {
         gender: selectedGender ? (selectedGender as ProductGender) : undefined,
         minPrice: minPriceParam ? Number(minPriceParam) : undefined,
         maxPrice: maxPriceParam ? Number(maxPriceParam) : undefined,
+        size: selectedSize ? Number(selectedSize) : undefined,
+        color: selectedColor || undefined,
         sort: ["newest", "price-asc", "price-desc", "name-asc", "name-desc"].includes(sortBy)
           ? sortBy
           : "newest",
       })
       .then((res) => {
         if (isMounted) {
-          let filtered = res.data;
-          if (selectedSize) {
-            filtered = filtered.filter((p) => p.sizes.includes(Number(selectedSize)));
-          }
-          if (selectedColor) {
-            filtered = filtered.filter((p) =>
-              p.colors.some((c) => c.toLowerCase() === selectedColor.toLowerCase()),
-            );
-          }
-
-          setProductsList(filtered);
+          setProductsList(res.data);
           setPaginationMeta(res.meta);
         }
       })

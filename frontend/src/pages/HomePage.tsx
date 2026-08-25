@@ -6,8 +6,8 @@ import { categories } from "../data/categories";
 import { catalogApi } from "../services/catalog-api";
 import { homepageApi, type HomepageSettingsData } from "../services/homepage-api";
 import type { Product } from "../types/product";
-import heroImageFallback from "../assets/images/hero-collection.png";
-import salePromoImageFallback from "../assets/images/sale-promo.png";
+import heroImageFallback from "../assets/images/hero-collection.webp";
+import salePromoImageFallback from "../assets/images/sale-promo.webp";
 
 function renderBenefitIcon(iconKey: string) {
   switch (iconKey) {
@@ -44,35 +44,42 @@ export function HomePage() {
   const [hpSettings, setHpSettings] = useState<HomepageSettingsData | null>(() => homepageApi.getCachedSettings());
 
   useEffect(() => {
-    homepageApi
-      .getPublicSettings()
-      .then((data) => setHpSettings(data))
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
     let isMounted = true;
-    const limit = hpSettings?.arrivalsLimit || 4;
+    const initialLimit = hpSettings?.arrivalsLimit || 4;
 
-    catalogApi
-      .getProducts({ limit, isFeatured: true })
-      .then((res) => {
-        if (isMounted) {
-          if (res.data.length > 0) {
-            setFeaturedProducts(res.data);
-          } else {
-            catalogApi.getProducts({ limit }).then((fallbackRes) => {
-              if (isMounted) setFeaturedProducts(fallbackRes.data);
-            });
-          }
+    Promise.allSettled([
+      homepageApi.getPublicSettings(),
+      catalogApi.getProducts({ limit: initialLimit, isFeatured: true }),
+    ]).then(([settingsResult, productsResult]) => {
+      if (!isMounted) return;
+
+      let resolvedLimit = initialLimit;
+      if (settingsResult.status === "fulfilled" && settingsResult.value) {
+        setHpSettings(settingsResult.value);
+        if (settingsResult.value.arrivalsLimit) {
+          resolvedLimit = settingsResult.value.arrivalsLimit;
         }
-      })
-      .catch(() => {});
+      }
+
+      if (productsResult.status === "fulfilled" && productsResult.value) {
+        const res = productsResult.value;
+        if (res.data.length > 0) {
+          setFeaturedProducts(res.data);
+        } else {
+          catalogApi
+            .getProducts({ limit: resolvedLimit })
+            .then((fallbackRes) => {
+              if (isMounted) setFeaturedProducts(fallbackRes.data);
+            })
+            .catch(() => {});
+        }
+      }
+    });
 
     return () => {
       isMounted = false;
     };
-  }, [hpSettings?.arrivalsLimit]);
+  }, []);
 
   const activeStats = hpSettings?.stats ? hpSettings.stats.filter((s) => s.enabled) : null;
   const activeBenefits = hpSettings?.benefits ? hpSettings.benefits.filter((b) => b.enabled) : null;
@@ -136,6 +143,11 @@ export function HomePage() {
               <img
                 src={hpSettings?.heroImageUrl || heroImageFallback}
                 alt="Shoe collection — footwear"
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                width={600}
+                height={450}
                 className="h-full w-full object-cover"
               />
             </div>
@@ -250,6 +262,10 @@ export function HomePage() {
               <img
                 src={hpSettings?.promoImageUrl || salePromoImageFallback}
                 alt="Seasonal shoe sale — curated collection"
+                loading="lazy"
+                decoding="async"
+                width={600}
+                height={400}
                 className="h-full w-full object-cover"
               />
             </div>

@@ -17,6 +17,7 @@ import { ReviewsModule } from "./reviews/reviews.module";
 import { ReturnsModule } from "./returns/returns.module";
 import { AuditModule } from "./audit/audit.module";
 import { HomepageModule } from "./homepage/homepage.module";
+import { ShoppingAssistantModule } from "./shopping-assistant/shopping-assistant.module";
 
 @Module({
   imports: [
@@ -38,6 +39,9 @@ import { HomepageModule } from "./homepage/homepage.module";
         RESEND_API_KEY: Joi.string().optional().allow(""),
         EMAIL_FROM: Joi.string().optional().allow(""),
         GOOGLE_CLIENT_ID: Joi.string().optional().allow(""),
+        SHOPPING_ASSISTANT_API_KEY: Joi.string().optional().allow(""),
+        SHOPPING_ASSISTANT_MODEL: Joi.string().optional().default("gemini-2.5-flash"),
+        GEMINI_API_KEY: Joi.string().optional().allow(""),
       }),
     }),
     PrismaModule,
@@ -56,6 +60,7 @@ import { HomepageModule } from "./homepage/homepage.module";
     ReviewsModule,
     ReturnsModule,
     HomepageModule,
+    ShoppingAssistantModule,
   ],
 })
 export class AppModule {}

@@ -1,4 +1,4 @@
-import { Controller, Get } from "@nestjs/common";
+import { Controller, Get, Header } from "@nestjs/common";
 import { ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Public } from "../../auth/decorators/public.decorator";
 import { PublicCategoriesService } from "./public-categories.service";
@@ -10,6 +10,7 @@ export class PublicCategoriesController {
   constructor(private readonly categoriesService: PublicCategoriesService) {}
 
   @Get()
+  @Header("Cache-Control", "public, max-age=120, stale-while-revalidate=600")
   @ApiOperation({ summary: "List active categories (Public)" })
   @ApiOkResponse({ description: "Active categories listed successfully." })
   async findAll() {

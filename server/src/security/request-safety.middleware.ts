@@ -28,6 +28,7 @@ const RATE_LIMITS = {
   resendVerification: { limit: 5, windowMs: 15 * 60 * 1000 },
   verifyEmail: { limit: 10, windowMs: 5 * 60 * 1000 },
   google: { limit: 15, windowMs: 5 * 60 * 1000 },
+  shoppingAssistant: { limit: 300, windowMs: 1 * 60 * 1000 },
 } as const;
 
 type Bucket = {
@@ -54,6 +55,7 @@ function getRouteName(request: Request): keyof typeof RATE_LIMITS | null {
   if (request.path === "/api/v1/auth/resend-verification") return "resendVerification";
   if (request.path === "/api/v1/auth/verify-email") return "verifyEmail";
   if (request.path === "/api/v1/auth/google") return "google";
+  if (request.path === "/api/v1/shopping-assistant/chat") return "shoppingAssistant";
   return null;
 }
 
@@ -71,6 +73,23 @@ function validateOrigin(request: Request, response: Response, next: NextFunction
   return next();
 }
 
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const MAX_STALE_AGE_MS = 15 * 60 * 1000;
+
+const cleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of buckets.entries()) {
+    value.timestamps = value.timestamps.filter((timestamp) => now - timestamp < MAX_STALE_AGE_MS);
+    if (value.timestamps.length === 0) {
+      buckets.delete(key);
+    }
+  }
+}, CLEANUP_INTERVAL_MS);
+
+if (typeof cleanupTimer.unref === "function") {
+  cleanupTimer.unref();
+}
+
 function applyRateLimit(request: Request, response: Response, next: NextFunction) {
   const routeName = getRouteName(request);
   if (!routeName) {
@@ -85,14 +104,6 @@ function applyRateLimit(request: Request, response: Response, next: NextFunction
   bucket.timestamps = bucket.timestamps.filter((timestamp) => now - timestamp < windowMs);
   bucket.timestamps.push(now);
   buckets.set(bucketKey, bucket);
-
-  const staleThreshold = now - Math.max(windowMs, 15 * 60 * 1000);
-  for (const [key, value] of buckets.entries()) {
-    value.timestamps = value.timestamps.filter((timestamp) => timestamp >= staleThreshold);
-    if (value.timestamps.length === 0) {
-      buckets.delete(key);
-    }
-  }
 
   if (bucket.timestamps.length > limit) {
     return response.status(429).json({ statusCode: 429, message: "Too many requests" });

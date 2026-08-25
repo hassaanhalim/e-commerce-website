@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type CSSProperties, type MouseEvent } from "react";
+import { useState, useMemo, useEffect, useRef, type CSSProperties, type MouseEvent } from "react";
 import { Link, useParams, useNavigate } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -96,16 +96,62 @@ export function ProductDetailsPage() {
         }
 
         const catSlug = res.categoryObj?.slug || res.category;
-        if (catSlug) {
-          catalogApi
-            .getProducts({ category: catSlug, limit: 5 })
-            .then((relRes) => {
-              if (isMounted) {
-                setRelatedProducts(relRes.data.filter((p) => p.id !== res.id && p.slug !== res.slug).slice(0, 4));
+
+        // Execute all secondary data requests in parallel
+        Promise.allSettled([
+          catSlug ? catalogApi.getProducts({ category: catSlug, limit: 5 }) : Promise.resolve(null),
+          reviewApi.getRatingSummary(res.id),
+          reviewApi.getProductReviews(res.id, { rating: selectedRatingFilter, page: reviewsPage, limit: 5 }),
+          user ? orderApi.getCustomerOrders({ status: "DELIVERED" as any }) : Promise.resolve(null),
+        ]).then(([relatedRes, summaryRes, reviewsRes, ordersRes]) => {
+          if (!isMounted) return;
+
+          if (relatedRes.status === "fulfilled" && relatedRes.value?.data) {
+            setRelatedProducts(
+              relatedRes.value.data.filter((p) => p.id !== res.id && p.slug !== res.slug).slice(0, 4),
+            );
+          }
+
+          if (summaryRes.status === "fulfilled" && summaryRes.value) {
+            setRatingSummary(summaryRes.value);
+          }
+
+          if (reviewsRes.status === "fulfilled" && reviewsRes.value) {
+            setReviews(reviewsRes.value.data);
+            setReviewsTotalPages(reviewsRes.value.meta.totalPages);
+            setReviewsLoading(false);
+          }
+
+          if (ordersRes.status === "fulfilled" && ordersRes.value?.data) {
+            let foundItemId: string | null = null;
+            for (const order of ordersRes.value.data) {
+              if (Array.isArray((order as any).items)) {
+                const item = (order as any).items.find(
+                  (i: any) => i.productId === res.id || i.product?.id === res.id,
+                );
+                if (item) {
+                  foundItemId = item.id;
+                  break;
+                }
               }
-            })
-            .catch(() => {});
-        }
+            }
+
+            if (foundItemId) {
+              reviewApi
+                .checkEligibility(foundItemId)
+                .then((el) => {
+                  if (isMounted && el.eligible) {
+                    setEligibleOrderItemId(foundItemId);
+                  }
+                })
+                .catch(() => {
+                  if (isMounted) setEligibleOrderItemId(null);
+                });
+            } else {
+              setEligibleOrderItemId(null);
+            }
+          }
+        });
       })
       .catch((err: unknown) => {
         if (!isMounted) return;
@@ -152,58 +198,15 @@ export function ProductDetailsPage() {
       });
   };
 
+  // Refetch reviews when user changes review page or rating filter
+  const isInitialReviewMount = useRef(true);
   useEffect(() => {
-    loadReviewsData();
-  }, [product?.id, reviewsPage, selectedRatingFilter]);
-
-  // Check Review Eligibility for Logged-In User
-  useEffect(() => {
-    if (!user || !product?.id) {
-      setEligibleOrderItemId(null);
+    if (isInitialReviewMount.current) {
+      isInitialReviewMount.current = false;
       return;
     }
-
-    let isMounted = true;
-    orderApi
-      .getCustomerOrders({ status: "DELIVERED" as any })
-      .then((res) => {
-        if (!isMounted) return;
-        let foundItemId: string | null = null;
-        for (const order of res.data) {
-          if (Array.isArray((order as any).items)) {
-            const item = (order as any).items.find(
-              (i: any) => i.productId === product.id || i.product?.id === product.id,
-            );
-            if (item) {
-              foundItemId = item.id;
-              break;
-            }
-          }
-        }
-
-        if (foundItemId) {
-          reviewApi
-            .checkEligibility(foundItemId)
-            .then((el) => {
-              if (isMounted && el.eligible) {
-                setEligibleOrderItemId(foundItemId);
-              }
-            })
-            .catch(() => {
-              if (isMounted) setEligibleOrderItemId(null);
-            });
-        } else {
-          setEligibleOrderItemId(null);
-        }
-      })
-      .catch(() => {
-        if (isMounted) setEligibleOrderItemId(null);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user, product?.id]);
+    loadReviewsData();
+  }, [reviewsPage, selectedRatingFilter]);
 
   const selectedVariant = useMemo(() => {
     if (!product || selectedSize === null || !selectedColor || !Array.isArray(product.variants)) {

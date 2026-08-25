@@ -11,6 +11,8 @@ function CategoryCard({ category }: CategoryCardProps) {
       <img
         src={category.image}
         alt={category.name}
+        loading="lazy"
+        decoding="async"
         className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
       />
 

@@ -1,58 +1,77 @@
+import { lazy, Suspense } from "react";
 import { Route, Routes, useLocation } from "react-router";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import PageLoader from "./components/common/PageLoader";
 import Footer from "./components/layout/Footer";
 import Navbar from "./components/layout/Navbar";
 import ScrollToTop from "./components/layout/ScrollToTop";
-import CartPage from "./pages/CartPage";
-import CheckoutPage from "./pages/CheckoutPage";
-import ContactPage from "./pages/ContactPage";
+import ShoppingAssistant from "./components/shopping-assistant/ShoppingAssistant";
+
+// Critical Core Customer Routes (kept fast for immediate first paint)
 import HomePage from "./pages/HomePage";
-import LoginPage from "./pages/LoginPage";
-import NotFoundPage from "./pages/NotFoundPage";
-import OrderSuccessPage from "./pages/OrderSuccessPage";
-import ProductDetailsPage from "./pages/ProductDetailsPage";
-import RegisterPage from "./pages/RegisterPage";
-import SearchResultsPage from "./pages/SearchResultsPage";
 import ShopPage from "./pages/ShopPage";
-import SizeGuidePage from "./pages/SizeGuidePage";
-import VerifyEmailPage from "./pages/VerifyEmailPage";
+import ProductDetailsPage from "./pages/ProductDetailsPage";
+import CartPage from "./pages/CartPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 
-// Customer Account Imports
-import AccountLayout from "./components/layout/AccountLayout";
-import AccountDashboard from "./pages/account/AccountDashboard";
-import AccountProfile from "./pages/account/AccountProfile";
-import AccountAddresses from "./pages/account/AccountAddresses";
-import AccountOrders from "./pages/account/AccountOrders";
-import AccountWishlist from "./pages/account/AccountWishlist";
-import GuestWishlistPage from "./pages/GuestWishlistPage";
-import AccountOrderDetail from "./pages/account/AccountOrderDetail";
-import TrackOrderPage from "./pages/TrackOrderPage";
-import AccountReviews from "./pages/account/AccountReviews";
-import AccountReturns from "./pages/account/AccountReturns";
+// Secondary & Auxiliary Routes (Code-Split / Lazy Loaded)
+const CheckoutPage = lazy(() => import("./pages/CheckoutPage"));
+const OrderSuccessPage = lazy(() => import("./pages/OrderSuccessPage"));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
+const GuestWishlistPage = lazy(() => import("./pages/GuestWishlistPage"));
+const TrackOrderPage = lazy(() => import("./pages/TrackOrderPage"));
+const SearchResultsPage = lazy(() => import("./pages/SearchResultsPage"));
+const ContactPage = lazy(() => import("./pages/ContactPage"));
+const SizeGuidePage = lazy(() => import("./pages/SizeGuidePage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
-// Admin Imports
-import AdminLayout from "./components/admin/AdminLayout";
-import DashboardPage from "./pages/admin/DashboardPage";
-import ProductListPage from "./pages/admin/ProductListPage";
-import ProductFormPage from "./pages/admin/ProductFormPage";
-import CategoriesPage from "./pages/admin/CategoriesPage";
-import BrandsPage from "./pages/admin/BrandsPage";
-import InventoryPage from "./pages/admin/InventoryPage";
-import OrderListPage from "./pages/admin/OrderListPage";
-import OrderDetailPage from "./pages/admin/OrderDetailPage";
-import CustomerListPage from "./pages/admin/CustomerListPage";
-import CustomerDetailPage from "./pages/admin/CustomerDetailPage";
-import ReviewsPage from "./pages/admin/ReviewsPage";
-import ReturnsPage from "./pages/admin/ReturnsPage";
-import ReturnDetailPage from "./pages/admin/ReturnDetailPage";
-import ReportsPage from "./pages/admin/ReportsPage";
-import StaffPage from "./pages/admin/StaffPage";
-import AuditLogPage from "./pages/admin/AuditLogPage";
-import SettingsPage from "./pages/admin/SettingsPage";
+// Customer Account Suite (Code-Split / Lazy Loaded)
+const AccountLayout = lazy(() => import("./components/layout/AccountLayout"));
+const AccountDashboard = lazy(() => import("./pages/account/AccountDashboard"));
+const AccountProfile = lazy(() => import("./pages/account/AccountProfile"));
+const AccountAddresses = lazy(() => import("./pages/account/AccountAddresses"));
+const AccountOrders = lazy(() => import("./pages/account/AccountOrders"));
+const AccountOrderDetail = lazy(() => import("./pages/account/AccountOrderDetail"));
+const AccountReturns = lazy(() => import("./pages/account/AccountReturns"));
+const AccountWishlist = lazy(() => import("./pages/account/AccountWishlist"));
+const AccountReviews = lazy(() => import("./pages/account/AccountReviews"));
+
+// Admin Portal Suite (Code-Split / Lazy Loaded)
+const AdminLayout = lazy(() => import("./components/admin/AdminLayout"));
+const DashboardPage = lazy(() => import("./pages/admin/DashboardPage"));
+const ProductListPage = lazy(() => import("./pages/admin/ProductListPage"));
+const ProductFormPage = lazy(() => import("./pages/admin/ProductFormPage"));
+const CategoriesPage = lazy(() => import("./pages/admin/CategoriesPage"));
+const BrandsPage = lazy(() => import("./pages/admin/BrandsPage"));
+const InventoryPage = lazy(() => import("./pages/admin/InventoryPage"));
+const OrderListPage = lazy(() => import("./pages/admin/OrderListPage"));
+const OrderDetailPage = lazy(() => import("./pages/admin/OrderDetailPage"));
+const CustomerListPage = lazy(() => import("./pages/admin/CustomerListPage"));
+const CustomerDetailPage = lazy(() => import("./pages/admin/CustomerDetailPage"));
+const ReviewsPage = lazy(() => import("./pages/admin/ReviewsPage"));
+const ReturnsPage = lazy(() => import("./pages/admin/ReturnsPage"));
+const ReturnDetailPage = lazy(() => import("./pages/admin/ReturnDetailPage"));
+const ReportsPage = lazy(() => import("./pages/admin/ReportsPage"));
+const StaffPage = lazy(() => import("./pages/admin/StaffPage"));
+const AuditLogPage = lazy(() => import("./pages/admin/AuditLogPage"));
+const SettingsPage = lazy(() => import("./pages/admin/SettingsPage"));
 
 function App() {
   const location = useLocation();
-  const isAdminRoute = location.pathname.startsWith("/admin");
+  const pathname = location.pathname;
+  const isAdminRoute = pathname.startsWith("/admin");
+
+  // Authentication & verification pages where chatbot should be hidden
+  const isAuthRoute =
+    pathname === "/login" ||
+    pathname.startsWith("/login/") ||
+    pathname === "/register" ||
+    pathname.startsWith("/register/") ||
+    pathname === "/verify-email" ||
+    pathname.startsWith("/verify-email/");
+
+  const showShoppingAssistant = !isAdminRoute && !isAuthRoute;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -60,79 +79,82 @@ function App() {
       {!isAdminRoute && <Navbar />}
 
       <div className="flex-1">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/shop" element={<ShopPage />} />
-          <Route path="/search" element={<SearchResultsPage />} />
-          <Route path="/products/:productId" element={<ProductDetailsPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          
-          {/* Guest checkout remains permitted. */}
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/order-success" element={<OrderSuccessPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="/verify-email" element={<VerifyEmailPage />} />
-          <Route path="/wishlist" element={<GuestWishlistPage />} />
-          <Route path="/track-order" element={<TrackOrderPage />} />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/shop" element={<ShopPage />} />
+            <Route path="/search" element={<SearchResultsPage />} />
+            <Route path="/products/:productId" element={<ProductDetailsPage />} />
+            <Route path="/cart" element={<CartPage />} />
 
-          {/* Public informational pages */}
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/size-guide" element={<SizeGuidePage />} />
-          
-          {/* Nested Customer Account Routes */}
-          <Route
-            path="/account"
-            element={
-              <ProtectedRoute allowedRoles={["CUSTOMER"]}>
-                <AccountLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<AccountDashboard />} />
-            <Route path="profile" element={<AccountProfile />} />
-            <Route path="addresses" element={<AccountAddresses />} />
-            <Route path="orders" element={<AccountOrders />} />
-            <Route path="orders/:orderId" element={<AccountOrderDetail />} />
-            <Route path="returns" element={<AccountReturns />} />
-            <Route path="wishlist" element={<AccountWishlist />} />
-            <Route path="reviews" element={<AccountReviews />} />
-          </Route>
+            {/* Guest checkout remains permitted. */}
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/order-success" element={<OrderSuccessPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/wishlist" element={<GuestWishlistPage />} />
+            <Route path="/track-order" element={<TrackOrderPage />} />
 
-          {/* Nested Admin Portal Routes */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute allowedRoles={["ADMIN"]}>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<DashboardPage />} />
-            <Route path="products" element={<ProductListPage />} />
-            <Route path="products/new" element={<ProductFormPage />} />
-            <Route path="products/:productId" element={<ProductFormPage />} />
-            <Route path="categories" element={<CategoriesPage />} />
-            <Route path="brands" element={<BrandsPage />} />
-            <Route path="inventory" element={<InventoryPage />} />
-            <Route path="orders" element={<OrderListPage />} />
-            <Route path="orders/:orderId" element={<OrderDetailPage />} />
-            <Route path="customers" element={<CustomerListPage />} />
-            <Route path="customers/:customerId" element={<CustomerDetailPage />} />
-            <Route path="reviews" element={<ReviewsPage />} />
-            <Route path="returns" element={<ReturnsPage />} />
-            <Route path="returns/:id" element={<ReturnDetailPage />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="staff" element={<StaffPage />} />
-            <Route path="audit-log" element={<AuditLogPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
+            {/* Public informational pages */}
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/size-guide" element={<SizeGuidePage />} />
 
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
+            {/* Nested Customer Account Routes */}
+            <Route
+              path="/account"
+              element={
+                <ProtectedRoute allowedRoles={["CUSTOMER"]}>
+                  <AccountLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<AccountDashboard />} />
+              <Route path="profile" element={<AccountProfile />} />
+              <Route path="addresses" element={<AccountAddresses />} />
+              <Route path="orders" element={<AccountOrders />} />
+              <Route path="orders/:orderId" element={<AccountOrderDetail />} />
+              <Route path="returns" element={<AccountReturns />} />
+              <Route path="wishlist" element={<AccountWishlist />} />
+              <Route path="reviews" element={<AccountReviews />} />
+            </Route>
+
+            {/* Nested Admin Portal Routes */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute allowedRoles={["ADMIN"]}>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<DashboardPage />} />
+              <Route path="products" element={<ProductListPage />} />
+              <Route path="products/new" element={<ProductFormPage />} />
+              <Route path="products/:productId" element={<ProductFormPage />} />
+              <Route path="categories" element={<CategoriesPage />} />
+              <Route path="brands" element={<BrandsPage />} />
+              <Route path="inventory" element={<InventoryPage />} />
+              <Route path="orders" element={<OrderListPage />} />
+              <Route path="orders/:orderId" element={<OrderDetailPage />} />
+              <Route path="customers" element={<CustomerListPage />} />
+              <Route path="customers/:customerId" element={<CustomerDetailPage />} />
+              <Route path="reviews" element={<ReviewsPage />} />
+              <Route path="returns" element={<ReturnsPage />} />
+              <Route path="returns/:id" element={<ReturnDetailPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+              <Route path="staff" element={<StaffPage />} />
+              <Route path="audit-log" element={<AuditLogPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
+
+            <Route path="*" element={<NotFoundPage />} />
+          </Routes>
+        </Suspense>
       </div>
 
       {!isAdminRoute && <Footer />}
+      {showShoppingAssistant && <ShoppingAssistant />}
     </div>
   );
 }

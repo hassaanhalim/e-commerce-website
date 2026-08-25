@@ -1,0 +1,2049 @@
+import { ForbiddenException, Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { ChatMessageRole, Prisma, ProductGender } from "@prisma/client";
+import { GoogleGenAI, Type } from "@google/genai";
+import { PrismaService } from "../prisma/prisma.service";
+import type { AuthenticatedUser } from "../auth/auth.types";
+import { ChatRequestDto } from "./dto/chat-request.dto";
+import {
+  ChatIntent,
+  HistoricalChatMessageDto,
+  NaturalLanguagePayload,
+  NextAction,
+  PendingQuestion,
+  ProductSearchConstraints,
+  RecommendationSearchResult,
+  RecommendedProductDto,
+  ShoePurpose,
+  ShoppingAssistantChatResponse,
+  ShoppingAssistantHistoryResponse,
+  ShoppingPreferences,
+  WearerInfo,
+  WearerType,
+} from "./types/shopping-assistant.types";
+
+export interface ExtractedDeltaUpdates {
+  intent?: ChatIntent | null;
+  wearerType?: WearerType | null;
+  wearerRelation?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  size?: number | null;
+  rawSizeInput?: string | null;
+  sizeSystemHint?: "US" | "UK" | "EU" | null;
+  isAmbiguousSmallSize?: boolean;
+  purpose?: ShoePurpose | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
+  brand?: string | null;
+  color?: string | null;
+  style?: string | null;
+  comfort?: string | null;
+  clearedFields?: Array<"brand" | "color" | "budget" | "size" | "purpose">;
+  isAmbiguousAffirmation?: boolean;
+  isAffirmativeRelaxation?: boolean;
+  isNegativeRelaxation?: boolean;
+  isNewWearerContext?: boolean;
+  isCorrection?: boolean;
+  isProactiveSuggestionRequest?: boolean;
+  language?: NaturalLanguagePayload | null;
+}
+
+const EXTRACTION_SYSTEM_INSTRUCTION = `You are a conversational shopping assistant for an online footwear store.
+Your job is to analyze the customer's message, extract newly mentioned or modified preferences, and generate a natural 1-2 sentence response.
+
+Guidelines:
+1. intent: "PRODUCT_DISCOVERY" | "PRODUCT_REFINEMENT" | "NEW_SHOPPING_CONTEXT" | "GENERAL_SHOE_HELP" | "OFF_TOPIC"
+2. wearerType: "SELF" | "CHILD" | "OTHER" | null
+3. wearerRelation: "daughter", "son", "husband", "wife", "sister", "brother", "mother", "father", "friend", "myself", "child" | null
+4. age: number | null
+5. gender: "MEN" | "WOMEN" | "BOYS" | "GIRLS" | "UNISEX" | null
+6. size: numeric integer string (e.g. "42", "38", "39", "8") | null
+7. purpose: "EVERYDAY" | "SPORTS" | "RUNNING" | "GYM" | "FORMAL" | "CASUAL" | null
+8. budgetMax: maximum budget number | null
+9. budgetMin: minimum budget number | null
+10. brand: brand name | null
+11. color: color string | null
+12. isAmbiguousAffirmation: true if customer replied "yes", "no", "ok", "both" to a choice question
+13. isAffirmativeRelaxation: true if customer agreed to relax constraints (e.g. "yes", "sure", "show casual")
+14. isNewWearerContext: true if shopping for someone new (e.g. "for my daughter", "for my sister")
+15. isCorrection: true if correcting previous input ("I said 38 not 3838", "actually 39")
+16. isProactiveSuggestionRequest: true if asking for suggestions ("suggest me", "what do you have")
+17. language:
+    - acknowledgement: short acknowledgement of the newly shared fact (e.g. "Got it, men's shoes in size 38.")
+    - question: natural phrasing of the single next logical question
+    - naturalReply: complete 1-2 sentence response combining acknowledgement and question
+
+CRITICAL RULES:
+- NEVER invent product names, specific shoe models, prices, discounts, or stock numbers in the language output.
+- Keep responses concise (1-2 sentences), friendly, and conversational.
+- Do NOT repeat greetings if the user already asked for a specific product.
+- Use natural pronouns based on wearer relation (daughter/sister/wife/mother -> she/her/your daughter/sister/wife, son/brother/husband/father -> he/him/your son/brother/husband).`;
+
+@Injectable()
+export class ShoppingAssistantService {
+  private readonly logger = new Logger(ShoppingAssistantService.name);
+  private readonly aiClient: GoogleGenAI | null = null;
+  private readonly modelName: string;
+
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
+    const apiKey =
+      this.configService.get<string>("SHOPPING_ASSISTANT_API_KEY") ||
+      this.configService.get<string>("GEMINI_API_KEY") ||
+      process.env.SHOPPING_ASSISTANT_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      "";
+
+    this.modelName =
+      this.configService.get<string>("SHOPPING_ASSISTANT_MODEL") ||
+      process.env.SHOPPING_ASSISTANT_MODEL ||
+      "gemini-3.7-flash";
+
+    if (apiKey) {
+      this.aiClient = new GoogleGenAI({ apiKey });
+      this.logger.log(`Initialized Shopping Assistant LLM with model: ${this.modelName}`);
+    } else {
+      this.logger.warn(
+        "SHOPPING_ASSISTANT_API_KEY or GEMINI_API_KEY not configured. Fast local deterministic mode enabled.",
+      );
+    }
+  }
+
+  async handleChat(
+    dto: ChatRequestDto,
+    user?: AuthenticatedUser,
+  ): Promise<ShoppingAssistantChatResponse> {
+    const startTime = Date.now();
+    const userMessage = dto.message.trim();
+
+    // Context token reduction: take only the latest 4-6 relevant messages
+    const history = (dto.messages || []).slice(-6);
+
+    let conversationId: string | null = null;
+
+    // Handle authenticated user conversation persistence initialization
+    if (user) {
+      try {
+        if (dto.conversationId) {
+          const existing = await this.prisma.chatConversation.findUnique({
+            where: { id: dto.conversationId },
+          });
+
+          if (existing) {
+            if (existing.userId !== user.id) {
+              throw new ForbiddenException("Cannot access conversation belonging to another user");
+            }
+            conversationId = existing.id;
+          }
+        }
+
+        if (!conversationId) {
+          const newConv = await this.prisma.chatConversation.create({
+            data: { userId: user.id },
+          });
+          conversationId = newConv.id;
+        }
+
+        // Persist user message
+        await this.prisma.chatMessage.create({
+          data: {
+            conversationId,
+            role: ChatMessageRole.USER,
+            content: userMessage,
+          },
+        });
+      } catch (err) {
+        this.logger.error("Failed to initialize or save user chat message to database", err);
+        if (err instanceof ForbiddenException) throw err;
+      }
+    }
+
+    // Authoritative incoming client state (Version 3)
+    const currentPreferences = this.sanitizePreferences(dto.preferences);
+    const currentPendingQuestion = dto.pendingQuestion || null;
+
+    // Step 1: Single Gemini Call per turn with Fast Path Optimization (Phase 4 Step 35)
+    let extractedUpdates: ExtractedDeltaUpdates;
+
+    const isSimpleFastPath = this.canUseFastPath(userMessage, currentPendingQuestion, currentPreferences);
+
+    if (!this.aiClient || isSimpleFastPath) {
+      extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
+    } else {
+      try {
+        const contents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
+
+        for (const msg of history) {
+          if (!msg.content?.trim()) continue;
+          contents.push({
+            role: msg.role === "assistant" ? "model" : "user",
+            parts: [{ text: msg.content.trim() }],
+          });
+        }
+
+        contents.push({
+          role: "user",
+          parts: [{ text: userMessage }],
+        });
+
+        const stateContextPrompt = `${EXTRACTION_SYSTEM_INSTRUCTION}\n\nCurrent Known Preferences State: ${JSON.stringify(currentPreferences)}\nCurrent Pending Question: ${JSON.stringify(currentPendingQuestion)}`;
+
+        const responsePromise = this.aiClient.models.generateContent({
+          model: this.modelName,
+          contents,
+          config: {
+            systemInstruction: stateContextPrompt,
+            responseMimeType: "application/json",
+            temperature: 0.2,
+            maxOutputTokens: 350,
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                intent: { type: Type.STRING, nullable: true },
+                wearerType: { type: Type.STRING, nullable: true },
+                wearerRelation: { type: Type.STRING, nullable: true },
+                age: { type: Type.NUMBER, nullable: true },
+                gender: { type: Type.STRING, nullable: true },
+                size: { type: Type.STRING, nullable: true },
+                purpose: { type: Type.STRING, nullable: true },
+                budgetMin: { type: Type.NUMBER, nullable: true },
+                budgetMax: { type: Type.NUMBER, nullable: true },
+                brand: { type: Type.STRING, nullable: true },
+                color: { type: Type.STRING, nullable: true },
+                style: { type: Type.STRING, nullable: true },
+                comfort: { type: Type.STRING, nullable: true },
+                isAmbiguousAffirmation: { type: Type.BOOLEAN, nullable: true },
+                isAffirmativeRelaxation: { type: Type.BOOLEAN, nullable: true },
+                isNewWearerContext: { type: Type.BOOLEAN, nullable: true },
+                isCorrection: { type: Type.BOOLEAN, nullable: true },
+                isProactiveSuggestionRequest: { type: Type.BOOLEAN, nullable: true },
+                language: {
+                  type: Type.OBJECT,
+                  nullable: true,
+                  properties: {
+                    acknowledgement: { type: Type.STRING, nullable: true },
+                    question: { type: Type.STRING, nullable: true },
+                    naturalReply: { type: Type.STRING, nullable: true },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("LLM request timed out after 6s")), 6000),
+        );
+
+        const result = await Promise.race([responsePromise, timeoutPromise]);
+        const rawText = result.text;
+
+        if (!rawText) {
+          throw new Error("Empty response from LLM");
+        }
+
+        const parsed = JSON.parse(rawText);
+        extractedUpdates = this.normalizeExtractedUpdates(parsed, userMessage, currentPendingQuestion, currentPreferences);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Unknown error";
+        this.logger.error(`Shopping Assistant LLM extraction error: ${errorMsg}`);
+        extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
+      }
+    }
+
+    // Step 2: Apply Intent Router & Authoritative Conversation State Engine (Phase 1)
+    const policyResult = this.applyConversationPolicy(
+      currentPreferences,
+      currentPendingQuestion,
+      extractedUpdates,
+      userMessage,
+    );
+
+    let finalResponse: ShoppingAssistantChatResponse;
+
+    // Step 3: Pure Database Grounded Search (Phase 2 & Phase 3)
+    if (policyResult.canSearchCatalog) {
+      try {
+        const searchResult = await this.findRecommendedProducts(policyResult.mergedPreferences);
+        const durationMs = Date.now() - startTime;
+        this.logger.log(`Recommendation search status: ${searchResult.status}, returned ${searchResult.products.length} products in ${durationMs}ms`);
+
+        if (searchResult.status === "MATCH" && searchResult.products.length > 0) {
+          let summaryIntro = `I found ${searchResult.products.length} options matching your preferences:`;
+          if (policyResult.mergedPreferences.size) {
+            summaryIntro = `I found ${searchResult.products.length} in-stock options in size ${policyResult.mergedPreferences.size}:`;
+          } else if (policyResult.mergedPreferences.brand) {
+            summaryIntro = `Here are popular in-stock ${policyResult.mergedPreferences.brand} options:`;
+          } else if (policyResult.mergedPreferences.purpose === "CASUAL") {
+            summaryIntro = "Here are some great casual and everyday alternatives available in stock:";
+          }
+
+          finalResponse = {
+            conversationId,
+            message: summaryIntro,
+            preferences: policyResult.mergedPreferences,
+            pendingQuestion: null,
+            readyForRecommendations: true,
+            products: searchResult.products,
+          };
+        } else {
+          // Zero-result handling strictly grounded in database realities
+          const requestedSizeNum = policyResult.mergedPreferences.size ?? null;
+          const isOutOfSizeRange =
+            requestedSizeNum !== null &&
+            !isNaN(requestedSizeNum) &&
+            (requestedSizeNum < 36 || requestedSizeNum > 44);
+
+          const isFormal = policyResult.mergedPreferences.purpose === "FORMAL";
+          const isChild =
+            (policyResult.mergedPreferences.wearer?.age !== null &&
+              policyResult.mergedPreferences.wearer?.age !== undefined &&
+              policyResult.mergedPreferences.wearer.age <= 12) ||
+            (policyResult.mergedPreferences.age !== null &&
+              policyResult.mergedPreferences.age !== undefined &&
+              policyResult.mergedPreferences.age <= 12) ||
+            (requestedSizeNum !== null && requestedSizeNum < 36);
+
+          if (isFormal) {
+            finalResponse = {
+              conversationId,
+              message: `I couldn't find any formal shoes in size ${policyResult.mergedPreferences.size ?? ""} in our current catalog. Would you like to see casual or everyday alternatives instead?`,
+              preferences: policyResult.mergedPreferences,
+              pendingQuestion: {
+                field: "RELAX_PURPOSE",
+                type: "BOOLEAN",
+                options: ["Show casual alternatives", "Try another size"],
+              },
+              readyForRecommendations: false,
+              products: [],
+            };
+          } else if (isOutOfSizeRange) {
+            finalResponse = {
+              conversationId,
+              message: `Our store inventory currently carries adult footwear in sizes 36 to 44. Size ${policyResult.mergedPreferences.size} is not available in stock. Would you like to see available options in size 36 or another size?`,
+              preferences: policyResult.mergedPreferences,
+              pendingQuestion: {
+                field: "SIZE",
+                type: "SIZE",
+                options: ["Show size 36 to 44", "Try another size"],
+              },
+              readyForRecommendations: false,
+              products: [],
+            };
+          } else if (isChild) {
+            finalResponse = {
+              conversationId,
+              message: "Our store currently carries adult and teen footwear (sizes 36 to 44) and does not currently stock young children sizes. Would you like me to look for adult or teen footwear instead?",
+              preferences: policyResult.mergedPreferences,
+              pendingQuestion: {
+                field: "WEARER",
+                type: "CHOICE",
+                options: ["Show adult options", "New search"],
+              },
+              readyForRecommendations: false,
+              products: [],
+            };
+          } else if (policyResult.mergedPreferences.budgetMax && policyResult.mergedPreferences.budgetMax < 5000) {
+            finalResponse = {
+              conversationId,
+              message: `I couldn't find any in-stock shoes under Rs ${policyResult.mergedPreferences.budgetMax.toLocaleString()} in size ${policyResult.mergedPreferences.size ?? ""}. Would you like to check options in a higher price range?`,
+              preferences: policyResult.mergedPreferences,
+              pendingQuestion: { field: "BUDGET", type: "NUMBER" },
+              readyForRecommendations: false,
+              products: [],
+            };
+          } else {
+            finalResponse = {
+              conversationId,
+              message: `I couldn't find an in-stock option matching all of those exact criteria in size ${policyResult.mergedPreferences.size ?? ""}. Would you like to try another brand or size?`,
+              preferences: policyResult.mergedPreferences,
+              pendingQuestion: {
+                field: "SIZE",
+                type: "SIZE",
+                options: ["Try another size", "Show all in-stock"],
+              },
+              readyForRecommendations: false,
+              products: [],
+            };
+          }
+        }
+      } catch (dbError) {
+        this.logger.error("Error querying product catalog", dbError);
+        finalResponse = {
+          conversationId,
+          message: "I couldn't search the catalog just now. Please try again in a moment.",
+          preferences: policyResult.mergedPreferences,
+          pendingQuestion: policyResult.nextQuestion,
+          readyForRecommendations: false,
+          products: [],
+        };
+      }
+    } else {
+      // Conversational question turn (Phase 3 Natural Phrasing with Action Validation Guard)
+      let finalMessage = policyResult.replyMessage || "How can I help you find the right pair of shoes today?";
+
+      // Check if Gemini generated a valid natural reply that aligns with nextAction
+      if (extractedUpdates.language?.naturalReply) {
+        const candidate = extractedUpdates.language.naturalReply.trim();
+        if (this.validateNaturalResponse(candidate, policyResult.mergedPreferences.nextAction, policyResult.mergedPreferences)) {
+          finalMessage = candidate;
+        }
+      }
+
+      finalResponse = {
+        conversationId,
+        message: finalMessage,
+        preferences: policyResult.mergedPreferences,
+        pendingQuestion: policyResult.nextQuestion,
+        readyForRecommendations: false,
+        products: [],
+      };
+    }
+
+    // Persist assistant message for authenticated user
+    if (user && conversationId) {
+      try {
+        const metadata =
+          finalResponse.products && finalResponse.products.length > 0
+            ? {
+                productIds: finalResponse.products.map((p) => p.id),
+                preferences: finalResponse.preferences,
+                pendingQuestion: finalResponse.pendingQuestion,
+              }
+            : {
+                preferences: finalResponse.preferences,
+                pendingQuestion: finalResponse.pendingQuestion,
+              };
+
+        await this.prisma.chatMessage.create({
+          data: {
+            conversationId,
+            role: ChatMessageRole.ASSISTANT,
+            content: finalResponse.message,
+            metadata: metadata as unknown as Prisma.InputJsonValue,
+          },
+        });
+
+        await this.prisma.chatConversation.update({
+          where: { id: conversationId },
+          data: { updatedAt: new Date() },
+        });
+      } catch (err) {
+        this.logger.error("Failed to persist assistant chat reply to database", err);
+      }
+    }
+
+    const durationMs = Date.now() - startTime;
+    this.logger.log(`Shopping Assistant turn completed in ${durationMs}ms`);
+
+    return finalResponse;
+  }
+
+  /**
+   * Fast-Path check (Phase 4 Step 35) for simple unambiguous replies
+   */
+  private canUseFastPath(
+    userMessage: string,
+    pendingQuestion: PendingQuestion | null,
+    preferences: ShoppingPreferences,
+  ): boolean {
+    const text = userMessage.trim().toLowerCase();
+    if (pendingQuestion?.field === "SIZE" && /^\d{1,2}$/.test(text)) return true;
+    if (
+      pendingQuestion?.field === "WEARER" &&
+      ["for me", "me", "myself", "for someone else", "someone else", "someone"].includes(text)
+    ) {
+      return true;
+    }
+    if (
+      pendingQuestion?.field === "WEARER_RELATION" &&
+      [
+        "my sister", "sister", "my brother", "brother", "my daughter", "daughter",
+        "my son", "son", "my wife", "wife", "my husband", "husband",
+        "my mother", "mother", "mom", "my father", "father", "dad",
+        "a friend", "friend", "my friend"
+      ].includes(text)
+    ) {
+      return true;
+    }
+    if (
+      pendingQuestion?.field === "RELAX_PURPOSE" &&
+      (["yes", "yeah", "yep", "sure", "ok", "no", "nope", "nah", "casual", "show casual"].includes(text) ||
+        text.includes("casual is fine") ||
+        text.includes("yeah casual"))
+    ) {
+      return true;
+    }
+    if (pendingQuestion?.type === "CHOICE" && ["yes", "no", "casual", "sports", "formal", "everyday"].includes(text)) return true;
+    return false;
+  }
+
+  /**
+   * Phase 3: Product-Claim Guard & Action Alignment Validation
+   */
+  public validateNaturalResponse(
+    text: string,
+    action: NextAction | null | undefined,
+    state: ShoppingPreferences,
+  ): boolean {
+    if (!text || text.length < 5 || text.length > 350) return false;
+    const textLower = text.toLowerCase();
+
+    // 1. PRODUCT-CLAIM GUARD: Never allow unsupported specific product claims or pricing in conversational text
+    const bannedProductClaims = [
+      "air max", "pegasus", "ultraboost", "zoom fly", "floatride", "novablast", "gel-venture", "smash v2",
+      "rs.", "pkr", "rs ", "dollars", "$", "discount", "percent off", "in stock for rs",
+    ];
+    for (const claim of bannedProductClaims) {
+      if (textLower.includes(claim)) return false;
+    }
+
+    // 2. ACTION ALIGNMENT GUARD
+    switch (action) {
+      case "ASK_SIZE":
+        return textLower.includes("size") || textLower.includes("fit");
+      case "ASK_PURPOSE":
+        return (
+          textLower.includes("everyday") ||
+          textLower.includes("sports") ||
+          textLower.includes("formal") ||
+          textLower.includes("casual") ||
+          textLower.includes("running") ||
+          textLower.includes("style") ||
+          textLower.includes("kind") ||
+          textLower.includes("type") ||
+          textLower.includes("after")
+        );
+      case "ASK_AGE":
+        return textLower.includes("old") || textLower.includes("age");
+      case "ASK_WEARER":
+        return textLower.includes("for you") || textLower.includes("someone else") || textLower.includes("who");
+      case "ASK_WEARER_RELATION":
+        return textLower.includes("who") || textLower.includes("for") || textLower.includes("they") || textLower.includes("person") || textLower.includes("someone");
+      case "CLARIFY_PURPOSE":
+        return textLower.includes("which") || textLower.includes("prefer") || textLower.includes("casual") || textLower.includes("sports");
+      case "CLARIFY_INPUT":
+        return textLower.includes("eu") || textLower.includes("us") || textLower.includes("uk") || textLower.includes("size");
+      case "OFF_TOPIC_REDIRECT":
+        return textLower.includes("shoe") || textLower.includes("footwear");
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Intent Router (Phase 1): Classifies incoming message into one of the 5 canonical intents
+   */
+  public classifyIntent(
+    userMessage: string,
+    state: ShoppingPreferences,
+    pendingQuestion: PendingQuestion | null,
+    extracted?: ExtractedDeltaUpdates,
+  ): ChatIntent {
+    const textLower = userMessage.toLowerCase().trim();
+
+    // 1. Off-Topic detection
+    if (
+      textLower.includes("python") ||
+      textLower.includes("write code") ||
+      textLower.includes("javascript") ||
+      textLower.includes("weather") ||
+      textLower.includes("recipe") ||
+      textLower.includes("essay")
+    ) {
+      return "OFF_TOPIC";
+    }
+
+    // 2. New Shopping Context
+    if (
+      extracted?.isNewWearerContext ||
+      textLower.includes("for my daughter") ||
+      textLower.includes("for my son") ||
+      textLower.includes("for my sister") ||
+      textLower.includes("for my brother") ||
+      textLower.includes("for my husband") ||
+      textLower.includes("for my wife") ||
+      textLower.includes("for my mother") ||
+      textLower.includes("for my mom") ||
+      textLower.includes("for my father") ||
+      textLower.includes("for my dad") ||
+      textLower.includes("shoes for myself") ||
+      textLower.includes("now i need") ||
+      textLower.includes("now for")
+    ) {
+      return "NEW_SHOPPING_CONTEXT";
+    }
+
+    // 3. Product Refinement
+    if (
+      extracted?.isCorrection ||
+      textLower.includes("cheaper") ||
+      textLower.includes("instead") ||
+      textLower.includes("actually") ||
+      textLower.includes("i meant") ||
+      textLower.includes("not ") ||
+      textLower.includes("under ") ||
+      textLower.includes("color") ||
+      textLower.includes("black if possible") ||
+      textLower.includes("in black") ||
+      (state.size && (extracted?.brand || extracted?.color || extracted?.budgetMax))
+    ) {
+      return "PRODUCT_REFINEMENT";
+    }
+
+    // 4. General Shoe Help
+    if (
+      textLower.includes("what size") ||
+      textLower.includes("size chart") ||
+      textLower.includes("how to measure")
+    ) {
+      return "GENERAL_SHOE_HELP";
+    }
+
+    // 5. Default: Product Discovery
+    return "PRODUCT_DISCOVERY";
+  }
+
+  /**
+   * Deterministic State Engine (Phase 1): Merges current state with extracted delta (3-state distinction)
+   */
+  public mergeStateWithDelta(
+    currentState: ShoppingPreferences,
+    updates: ExtractedDeltaUpdates,
+    userMessage: string,
+    currentPendingQuestion?: PendingQuestion | null,
+  ): ShoppingPreferences {
+    const textLower = userMessage.toLowerCase().trim();
+    const merged: ShoppingPreferences = {
+      version: 3,
+      intent: updates.intent ?? currentState.intent ?? "PRODUCT_DISCOVERY",
+      wearer: currentState.wearer ? { ...currentState.wearer } : null,
+      size: currentState.size !== undefined ? currentState.size : null,
+      rawSizeInput: currentState.rawSizeInput ?? null,
+      sizeSystem: currentState.sizeSystem ?? null,
+      purpose: currentState.purpose ?? null,
+      budgetMin: currentState.budgetMin ?? null,
+      budgetMax: currentState.budgetMax ?? null,
+      brand: currentState.brand ?? null,
+      color: currentState.color ?? null,
+      style: currentState.style ?? null,
+      comfort: currentState.comfort ?? null,
+      comfortPreference: currentState.comfortPreference ?? null,
+      other: currentState.other ?? null,
+      isRelaxationApproved: Boolean(currentState.isRelaxationApproved),
+      age: currentState.age ?? null,
+      gender: currentState.gender ?? null,
+      pendingQuestion: currentState.pendingQuestion ?? null,
+      nextAction: currentState.nextAction ?? null,
+    };
+
+    // Handle Context Switch (e.g. from self to daughter/sister)
+    const isNewWearer =
+      updates.isNewWearerContext ||
+      (updates.wearerRelation && updates.wearerRelation !== currentState.wearer?.relation);
+
+    if (isNewWearer) {
+      const newRelation = updates.wearerRelation || (updates.wearerType === "SELF" ? "myself" : null);
+      const isSelf = newRelation === "myself" || updates.wearerType === "SELF";
+      const isChild =
+        !isSelf &&
+        (updates.wearerType === "CHILD" ||
+          (newRelation && ["daughter", "son", "kid", "child"].includes(newRelation)) ||
+          (updates.age !== null && updates.age !== undefined && updates.age <= 12));
+
+      merged.wearer = {
+        type: isSelf ? "SELF" : isChild ? "CHILD" : (updates.wearerType ?? (newRelation ? "OTHER" : null)),
+        relation: newRelation,
+        age:
+          updates.age ??
+          (newRelation && currentState.wearer?.relation === newRelation ? currentState.wearer.age : null),
+        gender:
+          newRelation && ["daughter", "wife", "sister", "mother"].includes(newRelation)
+            ? (isChild ? "GIRLS" : "WOMEN")
+            : newRelation && ["son", "husband", "brother", "father"].includes(newRelation)
+            ? (isChild ? "BOYS" : "MEN")
+            : updates.gender ?? null,
+      };
+
+      // Context-sensitive clearing: Clear previous wearer's size, age, and relaxation flag
+      merged.size = null;
+      merged.rawSizeInput = null;
+      merged.sizeSystem = null;
+      merged.age = merged.wearer.age;
+      merged.gender = merged.wearer.gender;
+      merged.isRelaxationApproved = false;
+    } else {
+      // Merge wearer updates if provided
+      if (updates.wearerType || updates.wearerRelation || updates.age !== null || updates.gender) {
+        const isSelf =
+          updates.wearerRelation === "myself" ||
+          updates.wearerType === "SELF" ||
+          merged.wearer?.type === "SELF";
+        merged.wearer = {
+          type: isSelf ? "SELF" : updates.wearerType ?? merged.wearer?.type ?? null,
+          relation: updates.wearerRelation ?? merged.wearer?.relation ?? null,
+          age: updates.age ?? merged.wearer?.age ?? null,
+          gender: updates.gender ?? merged.wearer?.gender ?? null,
+        };
+        if (updates.age !== undefined && updates.age !== null) {
+          merged.age = updates.age;
+        }
+        if (updates.gender !== undefined && updates.gender !== null) {
+          merged.gender = updates.gender;
+        }
+      }
+    }
+
+    // Explicit field clearing (State 3: FIELD EXPLICITLY CLEARED)
+    if (updates.clearedFields && Array.isArray(updates.clearedFields)) {
+      for (const f of updates.clearedFields) {
+        if (f === "brand") merged.brand = null;
+        if (f === "color") merged.color = null;
+        if (f === "size") {
+          merged.size = null;
+          merged.rawSizeInput = null;
+          merged.sizeSystem = null;
+        }
+        if (f === "purpose") merged.purpose = null;
+        if (f === "budget") {
+          merged.budgetMin = null;
+          merged.budgetMax = null;
+        }
+      }
+    }
+
+    // Explicit field updates (State 2: FIELD EXPLICITLY UPDATED)
+    if (updates.size !== undefined) {
+      merged.size = updates.size;
+    }
+    if (updates.rawSizeInput) {
+      merged.rawSizeInput = updates.rawSizeInput;
+    }
+    if (updates.sizeSystemHint) {
+      merged.sizeSystem = updates.sizeSystemHint;
+    }
+    if (updates.purpose !== undefined && updates.purpose !== null) {
+      merged.purpose = updates.purpose;
+      merged.isRelaxationApproved = false;
+    }
+    if (updates.budgetMax !== undefined && updates.budgetMax !== null) {
+      merged.budgetMax = updates.budgetMax;
+    }
+    if (updates.budgetMin !== undefined && updates.budgetMin !== null) {
+      merged.budgetMin = updates.budgetMin;
+    }
+    if (updates.brand !== undefined && updates.brand !== null) {
+      merged.brand = updates.brand;
+    }
+    if (updates.color !== undefined && updates.color !== null) {
+      merged.color = updates.color;
+    }
+    if (updates.style !== undefined && updates.style !== null) {
+      merged.style = updates.style;
+    }
+    if (updates.comfort !== undefined && updates.comfort !== null) {
+      merged.comfort = updates.comfort;
+      merged.comfortPreference = updates.comfort;
+    }
+
+    // Relaxation approval handling
+    const isRelaxPrompt =
+      currentPendingQuestion?.field === "RELAX_PURPOSE" ||
+      currentState.pendingQuestion?.field === "RELAX_PURPOSE";
+    if (
+      updates.isAffirmativeRelaxation ||
+      (isRelaxPrompt &&
+        ["yes", "yeah", "yep", "sure", "ok", "casual", "show casual", "show me casual", "casual is fine", "yeah casual is fine"].includes(
+          textLower,
+        ))
+    ) {
+      merged.isRelaxationApproved = true;
+      if (isRelaxPrompt) {
+        merged.purpose = "CASUAL";
+      }
+    } else if (isRelaxPrompt && ["no", "nope", "nah", "don't", "dont"].includes(textLower)) {
+      merged.isRelaxationApproved = false;
+    }
+
+    // Proactive suggestion request handling
+    if (updates.isProactiveSuggestionRequest) {
+      merged.isRelaxationApproved = true;
+      merged.size = null;
+    }
+
+    return merged;
+  }
+
+  /**
+   * Deterministic Next-Action Engine (Phase 1 & Phase 3 Phrasing): Decides the next logical action
+   */
+  public determineNextAction(
+    state: ShoppingPreferences,
+    userMessage: string,
+    pendingQuestion: PendingQuestion | null,
+    updates?: ExtractedDeltaUpdates,
+  ): {
+    nextAction: NextAction;
+    nextQuestion: PendingQuestion | null;
+    replyMessage: string | null;
+    canSearchCatalog: boolean;
+  } {
+    const textLower = userMessage.toLowerCase().trim();
+
+    // 1. Off-Topic Redirection
+    if (state.intent === "OFF_TOPIC") {
+      return {
+        nextAction: "OFF_TOPIC_REDIRECT",
+        nextQuestion: {
+          field: "PURPOSE",
+          type: "CHOICE",
+          options: ["Everyday sneakers", "Sports shoes", "Help me choose"],
+        },
+        replyMessage:
+          "I'm focused on helping with shoes here. What kind of footwear are you looking for?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 2. Direct "Help me choose" / Greeting
+    if (
+      (textLower.includes("help me choose") || textLower === "help" || textLower === "choose") &&
+      !state.size &&
+      !state.purpose
+    ) {
+      return {
+        nextAction: "ASK_WEARER",
+        nextQuestion: { field: "WEARER", type: "CHOICE", options: ["For me", "For someone else"] },
+        replyMessage: "Sure! Are the shoes for you or someone else?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 2b. Wearer is OTHER but relation is not specified -> ASK_WEARER_RELATION
+    if (state.wearer?.type === "OTHER" && (!state.wearer?.relation || state.wearer.relation === "someone else")) {
+      return {
+        nextAction: "ASK_WEARER_RELATION",
+        nextQuestion: {
+          field: "WEARER_RELATION",
+          type: "CHOICE",
+          options: ["My sister", "My brother", "My daughter", "My son", "My wife", "My husband", "A friend"],
+        },
+        replyMessage: "Sure. Who are they for?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 3. Ambiguous small size or non-EU size clarification requirement (NO silent conversions)
+    if (updates?.isAmbiguousSmallSize || (state.rawSizeInput && state.size === null && updates?.rawSizeInput)) {
+      const raw = updates?.rawSizeInput || state.rawSizeInput;
+      return {
+        nextAction: "CLARIFY_INPUT",
+        nextQuestion: {
+          field: "SIZE_SYSTEM",
+          type: "CHOICE",
+          options: ["EU size (36 to 44)", "US/UK size"],
+        },
+        replyMessage: `Is that EU, US, or UK size ${raw}? Our store catalog is listed in European sizes (36 to 44).`,
+        canSearchCatalog: false,
+      };
+    }
+
+    // 4. Ambiguous "yes" to a CHOICE question -> Clarify
+    if (
+      pendingQuestion?.type === "CHOICE" &&
+      (updates?.isAmbiguousAffirmation ||
+        ["yes", "yeah", "yep", "anything", "both", "all", "ok", "sure"].includes(
+          textLower,
+        ))
+    ) {
+      return {
+        nextAction: "CLARIFY_PURPOSE",
+        nextQuestion: pendingQuestion,
+        replyMessage: "Which would you prefer: everyday, sports, or formal shoes?",
+        canSearchCatalog: false,
+      };
+    }
+
+    // 5. Relaxation handling to a BOOLEAN question (e.g. RELAX_PURPOSE)
+    if (pendingQuestion?.field === "RELAX_PURPOSE") {
+      if (
+        updates?.isAffirmativeRelaxation ||
+        ["yes", "yeah", "yep", "sure", "ok", "casual", "show casual", "show me casual", "casual is fine", "yeah casual is fine"].includes(
+          textLower,
+        )
+      ) {
+        return {
+          nextAction: "SEARCH_PRODUCTS",
+          nextQuestion: null,
+          replyMessage: null,
+          canSearchCatalog: true,
+        };
+      } else if (["no", "nope", "nah", "dont", "don't"].includes(textLower)) {
+        return {
+          nextAction: "ASK_PURPOSE",
+          nextQuestion: {
+            field: "PURPOSE",
+            type: "CHOICE",
+            options: ["Sports shoes", "Everyday sneakers", "Try another size"],
+          },
+          replyMessage: "Understood. Would you like to check sports shoes, everyday sneakers, or try another size?",
+          canSearchCatalog: false,
+        };
+      }
+    }
+
+    // 6. Proactive suggestion requests
+    if (
+      updates?.isProactiveSuggestionRequest ||
+      textLower.includes("suggest me") ||
+      textLower.includes("suggest something") ||
+      textLower.includes("yes suggest") ||
+      textLower.includes("what do you have") ||
+      textLower.includes("show me popular") ||
+      textLower.includes("show all") ||
+      (pendingQuestion?.field === "SIZE" &&
+        ["yes", "sure", "ok", "suggest", "show me"].includes(textLower))
+    ) {
+      return {
+        nextAction: "SEARCH_PRODUCTS",
+        nextQuestion: null,
+        replyMessage: null,
+        canSearchCatalog: true,
+      };
+    }
+
+    // 7. Child context: check if age is unknown and size is not yet adult size
+    const wearer = state.wearer;
+    const isChild =
+      wearer?.type === "CHILD" ||
+      ["daughter", "son", "kid", "child"].includes(wearer?.relation || "") ||
+      (state.age !== null && state.age !== undefined && state.age <= 12);
+
+    const hasAdultSize = state.size && state.size >= 36;
+
+    if (isChild && (!wearer?.age || wearer.age === null) && !hasAdultSize) {
+      const relName = wearer?.relation || "child";
+      return {
+        nextAction: "ASK_AGE",
+        nextQuestion: { field: "AGE", type: "NUMBER" },
+        replyMessage: `How old is your ${relName}?`,
+        canSearchCatalog: false,
+      };
+    }
+
+    // 8. Out-of-range size handling (e.g. size 28, 49)
+    if (state.size !== null && state.size !== undefined) {
+      const requestedSizeNum = state.size;
+      if (!isNaN(requestedSizeNum) && (requestedSizeNum < 36 || requestedSizeNum > 44)) {
+        return {
+          nextAction: "ASK_SIZE",
+          nextQuestion: {
+            field: "SIZE",
+            type: "SIZE",
+            options: ["Show size 36 to 44", "Try another size"],
+          },
+          replyMessage: `Our store inventory currently carries adult footwear in sizes 36 to 44. Size ${state.size} is not available in stock. Would you like to see available options in size 36 or another size?`,
+          canSearchCatalog: false,
+        };
+      }
+    }
+
+    // 9. Handle repeated gender/wearer input (e.g. user says "men" again when gender is already known)
+    if (
+      (textLower === "men" || textLower === "women") &&
+      state.gender?.toLowerCase() === textLower
+    ) {
+      if (!state.size) {
+        return {
+          nextAction: "ASK_SIZE",
+          nextQuestion: { field: "SIZE", type: "SIZE" },
+          replyMessage: `Yes, I've got that they're for ${textLower}. What shoe size do you wear?`,
+          canSearchCatalog: false,
+        };
+      } else if (!state.purpose && !state.brand) {
+        return {
+          nextAction: "ASK_PURPOSE",
+          nextQuestion: {
+            field: "PURPOSE",
+            type: "CHOICE",
+            options: ["Everyday sneakers", "Sports shoes", "Formal shoes"],
+          },
+          replyMessage: `Yes, I've got that they're for ${textLower}. What style or purpose are you looking for: everyday sneakers, sports shoes, or formal shoes?`,
+          canSearchCatalog: false,
+        };
+      }
+    }
+
+    // 10. Size is missing -> ASK_SIZE (Wearer-aware phrasing)
+    if (state.size === null || state.size === undefined) {
+      let sizePrompt = "What shoe size do you wear?";
+      if (wearer?.relation === "daughter") {
+        sizePrompt = "What shoe size does she usually wear?";
+      } else if (wearer?.relation === "son") {
+        sizePrompt = "What shoe size does he usually wear?";
+      } else if (wearer?.relation === "sister") {
+        sizePrompt = "What size does your sister wear?";
+      } else if (wearer?.relation === "brother") {
+        sizePrompt = "What size does your brother wear?";
+      } else if (wearer?.relation === "husband") {
+        sizePrompt = "What size does your husband wear?";
+      } else if (wearer?.relation === "wife") {
+        sizePrompt = "What size does your wife wear?";
+      } else if (wearer?.relation === "mother") {
+        sizePrompt = "What size does your mother wear?";
+      } else if (wearer?.relation === "father") {
+        sizePrompt = "What size does your father wear?";
+      } else if (wearer?.relation === "friend") {
+        sizePrompt = "What size do they wear?";
+      } else if (wearer?.type === "OTHER") {
+        sizePrompt = "What shoe size do they wear?";
+      } else if (isChild) {
+        sizePrompt = "What shoe size does your child usually wear?";
+      } else if (updates?.gender === "MEN") {
+        sizePrompt = "Got it, men's shoes! What size do you wear?";
+      } else if (updates?.gender === "WOMEN") {
+        sizePrompt = "Got it, women's shoes! What size do you wear?";
+      } else if (updates?.brand) {
+        sizePrompt = `Got it, ${updates.brand}! What shoe size do you wear?`;
+      }
+
+      return {
+        nextAction: "ASK_SIZE",
+        nextQuestion: { field: "SIZE", type: "SIZE" },
+        replyMessage: sizePrompt,
+        canSearchCatalog: false,
+      };
+    }
+
+    // 11. Direct Brand Search when size is known or brand specifically requested
+    if (state.brand && !state.purpose) {
+      return {
+        nextAction: "SEARCH_PRODUCTS",
+        nextQuestion: null,
+        replyMessage: null,
+        canSearchCatalog: true,
+      };
+    }
+
+    // 12. Purpose is missing -> ASK_PURPOSE
+    if (!state.purpose && !state.brand) {
+      let purposePrompt = "Are you looking for everyday shoes, sports shoes, or something more formal?";
+      if (updates?.isCorrection && updates?.size) {
+        purposePrompt = `Got it, size ${state.size}. Are you looking for everyday shoes, sports shoes, or something more formal?`;
+      } else if (updates?.size && (wearer?.relation === "sister" || wearer?.relation === "daughter" || wearer?.relation === "mother" || wearer?.relation === "wife")) {
+        purposePrompt = `Perfect, size ${state.size}. Is she looking for something casual, sporty, or formal?`;
+      } else if (updates?.size && (wearer?.relation === "brother" || wearer?.relation === "son" || wearer?.relation === "father" || wearer?.relation === "husband")) {
+        purposePrompt = `Perfect, size ${state.size}. Is he looking for something casual, sporty, or formal?`;
+      } else if (updates?.size && (wearer?.relation === "friend" || wearer?.type === "OTHER")) {
+        purposePrompt = `Perfect, size ${state.size}. Are they looking for something casual, sporty, or formal?`;
+      } else if (updates?.size && !isChild) {
+        purposePrompt = `Perfect, size ${state.size}. Are you after something casual, sporty, or formal?`;
+      } else if (isChild) {
+        purposePrompt = "Are they for everyday wear or sports?";
+      }
+
+      return {
+        nextAction: "ASK_PURPOSE",
+        nextQuestion: {
+          field: "PURPOSE",
+          type: "CHOICE",
+          options: isChild ? ["Everyday", "Sports"] : ["Everyday", "Sports", "Formal"],
+        },
+        replyMessage: purposePrompt,
+        canSearchCatalog: false,
+      };
+    }
+
+    // 13. Size AND (Purpose OR Brand OR Budget) are known -> SEARCH_PRODUCTS
+    return {
+      nextAction: "SEARCH_PRODUCTS",
+      nextQuestion: null,
+      replyMessage: null,
+      canSearchCatalog: true,
+    };
+  }
+
+  /**
+   * Deterministic conversation policy and state transition coordinator
+   */
+  private applyConversationPolicy(
+    currentPreferences: ShoppingPreferences,
+    currentPendingQuestion: PendingQuestion | null,
+    updates: ExtractedDeltaUpdates,
+    userMessage: string,
+  ): {
+    mergedPreferences: ShoppingPreferences;
+    nextQuestion: PendingQuestion | null;
+    replyMessage: string | null;
+    canSearchCatalog: boolean;
+  } {
+    // 1. Route Intent
+    const intent = this.classifyIntent(userMessage, currentPreferences, currentPendingQuestion, updates);
+    updates.intent = intent;
+
+    // 2. Merge State (3-State Distinction & Context-Sensitive Clearing)
+    const mergedPreferences = this.mergeStateWithDelta(currentPreferences, updates, userMessage, currentPendingQuestion);
+
+    // 3. Determine Next Action
+    const actionResult = this.determineNextAction(mergedPreferences, userMessage, currentPendingQuestion, updates);
+    mergedPreferences.nextAction = actionResult.nextAction;
+    mergedPreferences.pendingQuestion = actionResult.nextQuestion;
+
+    return {
+      mergedPreferences,
+      nextQuestion: actionResult.nextQuestion,
+      replyMessage: actionResult.replyMessage,
+      canSearchCatalog: actionResult.canSearchCatalog,
+    };
+  }
+
+  /**
+   * Phase 2: Centralized Search Constraint Builder
+   */
+  public buildProductSearchConstraints(preferences: ShoppingPreferences): ProductSearchConstraints {
+    const size = preferences.size !== undefined && preferences.size !== null ? preferences.size : null;
+
+    const isChild =
+      preferences.wearer?.type === "CHILD" ||
+      (preferences.wearer?.age !== null &&
+        preferences.wearer?.age !== undefined &&
+        preferences.wearer.age <= 12) ||
+      (preferences.age !== null &&
+        preferences.age !== undefined &&
+        preferences.age <= 12) ||
+      (size !== null && size < 36) ||
+      preferences.gender === "kids";
+
+    let gender: "Men" | "Women" | "Unisex" | "Kids" | null = null;
+    if (isChild) {
+      gender = "Kids";
+    } else if (
+      preferences.wearer?.gender === "GIRLS" ||
+      preferences.gender === "women" ||
+      preferences.gender === "WOMEN" ||
+      preferences.gender === "woman"
+    ) {
+      gender = "Women";
+    } else if (
+      preferences.wearer?.gender === "BOYS" ||
+      preferences.gender === "men" ||
+      preferences.gender === "MEN" ||
+      preferences.gender === "man"
+    ) {
+      gender = "Men";
+    }
+
+    return {
+      gender,
+      wearerType: preferences.wearer?.type || null,
+      isChild,
+      size,
+      purpose: preferences.purpose || null,
+      budgetMin: preferences.budgetMin ?? null,
+      budgetMax: preferences.budgetMax ?? null,
+      brand: preferences.brand ? preferences.brand.trim() : null,
+      color: preferences.color ? preferences.color.toLowerCase().trim() : null,
+      isRelaxationApproved: Boolean(preferences.isRelaxationApproved),
+    };
+  }
+
+  /**
+   * Phase 2: Authoritative storefront effective pricing calculation
+   */
+  public calculateEffectivePrice(
+    basePrice: Prisma.Decimal | number,
+    salePrice?: Prisma.Decimal | number | null,
+  ): { displayPrice: number; originalPrice: number; isOnSale: boolean } {
+    const base = Number(basePrice);
+    const sale = salePrice !== null && salePrice !== undefined ? Number(salePrice) : null;
+    if (sale !== null && !isNaN(sale) && sale > 0 && sale < base) {
+      return { displayPrice: sale, originalPrice: base, isOnSale: true };
+    }
+    return { displayPrice: base, originalPrice: base, isOnSale: false };
+  }
+
+  /**
+   * Phase 2: Deterministic Validation Barrier
+   * Validates each candidate product against hard constraints before exposing it.
+   */
+  public validateRecommendation(
+    product: {
+      id: string;
+      name: string;
+      slug: string;
+      basePrice: Prisma.Decimal | number;
+      salePrice?: Prisma.Decimal | number | null;
+      gender: ProductGender;
+      isActive: boolean;
+      brand: { name: string };
+      category: { name: string; slug: string };
+      variants: Array<{
+        id: string;
+        size: number;
+        color: string;
+        isActive: boolean;
+        price?: Prisma.Decimal | number | null;
+        inventory: { quantityOnHand: number; reservedQuantity: number } | null;
+      }>;
+    },
+    constraints: ProductSearchConstraints,
+  ): {
+    valid: boolean;
+    reason?: string;
+    matchedVariant?: any;
+    availableQuantity?: number;
+    displayPrice?: number;
+    originalPrice?: number;
+  } {
+    // 1. HARD: Active Product
+    if (!product.isActive) {
+      return { valid: false, reason: "Product is inactive" };
+    }
+
+    // 2. HARD: Brand Check (if requested as hard constraint)
+    if (constraints.brand && !product.brand.name.toLowerCase().includes(constraints.brand.toLowerCase())) {
+      return { valid: false, reason: `Brand ${product.brand.name} does not match requested ${constraints.brand}` };
+    }
+
+    // 3. HARD: Wearer/Gender Compatibility
+    if (constraints.isChild && product.gender !== ProductGender.Kids) {
+      return { valid: false, reason: "Adult product cannot be recommended for child" };
+    }
+    if (constraints.gender === "Women" && product.gender !== ProductGender.Women && product.gender !== ProductGender.Unisex) {
+      return { valid: false, reason: "Product is not women/unisex compatible" };
+    }
+    if (constraints.gender === "Men" && product.gender !== ProductGender.Men && product.gender !== ProductGender.Unisex) {
+      return { valid: false, reason: "Product is not men/unisex compatible" };
+    }
+
+    // 4. HARD: Purpose Taxonomy Compatibility
+    const pSlug = product.category.slug.toLowerCase();
+    const pName = product.name.toLowerCase();
+    if (constraints.purpose === "FORMAL") {
+      const isTrueFormal =
+        pSlug === "formal" ||
+        pSlug === "dress" ||
+        pName.includes("formal") ||
+        pName.includes("oxford");
+      if (!isTrueFormal) {
+        return { valid: false, reason: "Product is not a formal shoe" };
+      }
+    } else if (constraints.purpose === "RUNNING") {
+      const isRunning =
+        pSlug === "sports" ||
+        pName.includes("run") ||
+        pName.includes("running") ||
+        pName.includes("runner");
+      if (!isRunning) {
+        return { valid: false, reason: "Product is not running-compatible" };
+      }
+    } else if (constraints.purpose === "SPORTS" || constraints.purpose === "GYM") {
+      const isSports =
+        pSlug === "sports" ||
+        pName.includes("sport") ||
+        pName.includes("gym") ||
+        pName.includes("train") ||
+        pName.includes("run");
+      if (!isSports) {
+        return { valid: false, reason: "Product is not sports-compatible" };
+      }
+    }
+
+    // 5. HARD: Find Active Matching Variant with Positive Stock (> 0)
+    const inStockMatchingVariants = (product.variants || []).filter((v) => {
+      if (!v.isActive) return false;
+      const onHand = v.inventory?.quantityOnHand ?? 0;
+      const reserved = v.inventory?.reservedQuantity ?? 0;
+      const available = onHand - reserved;
+      if (available <= 0) return false;
+
+      // Exact Size Hard Constraint
+      if (constraints.size !== null && v.size !== constraints.size) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (inStockMatchingVariants.length === 0) {
+      return { valid: false, reason: "No active in-stock variant matching requested size" };
+    }
+
+    const matchedVariant = inStockMatchingVariants[0];
+    const availableQuantity = (matchedVariant.inventory?.quantityOnHand ?? 0) - (matchedVariant.inventory?.reservedQuantity ?? 0);
+
+    // 6. HARD: Effective Price within Budget Bounds
+    const pricing = this.calculateEffectivePrice(product.basePrice, product.salePrice);
+    if (constraints.budgetMax !== null && pricing.displayPrice > constraints.budgetMax) {
+      return { valid: false, reason: `Price ${pricing.displayPrice} exceeds max budget ${constraints.budgetMax}` };
+    }
+    if (constraints.budgetMin !== null && pricing.displayPrice < constraints.budgetMin) {
+      return { valid: false, reason: `Price ${pricing.displayPrice} is below min budget ${constraints.budgetMin}` };
+    }
+
+    return {
+      valid: true,
+      matchedVariant,
+      availableQuantity,
+      displayPrice: pricing.displayPrice,
+      originalPrice: pricing.originalPrice,
+    };
+  }
+
+  /**
+   * Phase 2: Authoritative Database Product Retrieval
+   */
+  async findRecommendedProducts(
+    preferences: ShoppingPreferences,
+  ): Promise<RecommendationSearchResult> {
+    const constraints = this.buildProductSearchConstraints(preferences);
+
+    // If child wearer or size < 36, check if kids products exist
+    if (constraints.isChild) {
+      const kidsCount = await this.prisma.product.count({
+        where: { isActive: true, gender: ProductGender.Kids },
+      });
+      if (kidsCount === 0) {
+        return { status: "NO_MATCH", products: [] };
+      }
+    }
+
+    // Build database query filters
+    const where: Prisma.ProductWhereInput = {
+      isActive: true,
+      category: { isActive: true },
+      brand: { isActive: true },
+      variants: {
+        some: {
+          isActive: true,
+          ...(constraints.size !== null ? { size: constraints.size } : {}),
+          inventory: {
+            quantityOnHand: { gt: 0 },
+          },
+        },
+      },
+    };
+
+    // Category / Purpose filter
+    if (constraints.purpose === "FORMAL") {
+      where.OR = [
+        { category: { slug: { in: ["formal", "dress"] } } },
+        { name: { contains: "formal", mode: "insensitive" } },
+        { description: { contains: "formal", mode: "insensitive" } },
+        { description: { contains: "oxford", mode: "insensitive" } },
+      ];
+    } else if (
+      constraints.purpose === "SPORTS" ||
+      constraints.purpose === "RUNNING" ||
+      constraints.purpose === "GYM"
+    ) {
+      where.category = { slug: "sports", isActive: true };
+    } else if (constraints.purpose === "EVERYDAY" || constraints.purpose === "CASUAL") {
+      where.category = { slug: { in: ["men", "women", "sports"] }, isActive: true };
+    }
+
+    // Gender filter
+    if (constraints.gender === "Women") {
+      where.gender = { in: [ProductGender.Women, ProductGender.Unisex] };
+    } else if (constraints.gender === "Men") {
+      where.gender = { in: [ProductGender.Men, ProductGender.Unisex] };
+    } else if (constraints.gender === "Kids") {
+      where.gender = ProductGender.Kids;
+    }
+
+    // Brand filter
+    if (constraints.brand) {
+      where.brand = {
+        name: { contains: constraints.brand, mode: "insensitive" },
+        isActive: true,
+      };
+    }
+
+    // Budget filter
+    if (constraints.budgetMax !== null && constraints.budgetMax > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        {
+          OR: [
+            { salePrice: { not: null, lte: constraints.budgetMax } },
+            { salePrice: null, basePrice: { lte: constraints.budgetMax } },
+          ],
+        },
+      ];
+    }
+
+    if (constraints.budgetMin !== null && constraints.budgetMin > 0) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        {
+          OR: [
+            { salePrice: { not: null, gte: constraints.budgetMin } },
+            { salePrice: null, basePrice: { gte: constraints.budgetMin } },
+          ],
+        },
+      ];
+    }
+
+    // Query candidate products from Prisma with minimal field selection
+    let rawProducts = await this.prisma.product.findMany({
+      where,
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        basePrice: true,
+        salePrice: true,
+        gender: true,
+        isFeatured: true,
+        isActive: true,
+        brand: { select: { name: true } },
+        category: { select: { name: true, slug: true } },
+        images: {
+          select: { url: true, isPrimary: true, sortOrder: true },
+          orderBy: { sortOrder: "asc" },
+          take: 2,
+        },
+        variants: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            size: true,
+            color: true,
+            isActive: true,
+            price: true,
+            inventory: {
+              select: {
+                quantityOnHand: true,
+                reservedQuantity: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Run each candidate through the Deterministic Validation Barrier
+    const validCandidates: Array<{
+      product: RecommendedProductDto;
+      score: number;
+    }> = [];
+
+    for (const p of rawProducts) {
+      const validation = this.validateRecommendation(p, constraints);
+      if (!validation.valid) continue;
+
+      const inStockVariants = (p.variants || []).filter((v) => {
+        const onHand = v.inventory?.quantityOnHand ?? 0;
+        const reserved = v.inventory?.reservedQuantity ?? 0;
+        return v.isActive && onHand - reserved > 0;
+      });
+
+      const availableSizes = Array.from(new Set(inStockVariants.map((v) => v.size))).sort((a, b) => a - b);
+      const availableColors = Array.from(new Set(inStockVariants.map((v) => v.color)));
+
+      let score = 10;
+      let matchingSizes: number[] | undefined;
+      let matchingColors: string[] | undefined;
+
+      if (constraints.size !== null && availableSizes.includes(constraints.size)) {
+        score += 60;
+        matchingSizes = [constraints.size];
+      }
+
+      if (constraints.color) {
+        const foundColor = availableColors.find(
+          (c) => c.toLowerCase() === constraints.color || constraints.color!.includes(c.toLowerCase()),
+        );
+        if (foundColor) {
+          score += 30;
+          matchingColors = [foundColor];
+        }
+      }
+
+      if (constraints.brand && p.brand.name.toLowerCase().includes(constraints.brand.toLowerCase())) {
+        score += 30;
+      }
+
+      if (p.isFeatured) {
+        score += 10;
+      }
+
+      if (validation.availableQuantity && validation.availableQuantity > 5) {
+        score += 5;
+      }
+
+      const primaryImg = p.images.find((img) => img.isPrimary) || p.images[0];
+      const imageUrl = primaryImg?.url || "";
+
+      validCandidates.push({
+        score,
+        product: {
+          id: p.id,
+          name: p.name,
+          slug: p.slug,
+          brand: p.brand.name,
+          category: p.category.name,
+          price: Number(p.basePrice),
+          originalPrice: validation.originalPrice,
+          salePrice: p.salePrice ? Number(p.salePrice) : null,
+          displayPrice: validation.displayPrice ?? Number(p.basePrice),
+          image: imageUrl,
+          inStock: true,
+          availableSizes,
+          matchingSizes,
+          matchedSize: constraints.size ?? undefined,
+          matchedVariantId: validation.matchedVariant?.id,
+          availableQuantity: validation.availableQuantity,
+          matchingColors,
+        },
+      });
+    }
+
+    if (validCandidates.length === 0) {
+      const possibleRelaxations: Array<"PURPOSE" | "BRAND" | "BUDGET" | "SIZE"> = [];
+      if (constraints.purpose === "FORMAL") possibleRelaxations.push("PURPOSE");
+      if (constraints.brand) possibleRelaxations.push("BRAND");
+      if (constraints.budgetMax) possibleRelaxations.push("BUDGET");
+      return {
+        status: "NO_MATCH",
+        products: [],
+        possibleRelaxations,
+      };
+    }
+
+    // Deterministic ranking: Sort descending by score
+    validCandidates.sort((a, b) => b.score - a.score);
+
+    // Return top 3-4 products maximum
+    const finalProducts = validCandidates.slice(0, 4).map((c) => c.product);
+
+    return {
+      status: "MATCH",
+      products: finalProducts,
+    };
+  }
+
+  /**
+   * Load the customer's most recent conversation with live catalog cards
+   */
+  async getLatestHistory(user: AuthenticatedUser): Promise<ShoppingAssistantHistoryResponse> {
+    const conversation = await this.prisma.chatConversation.findFirst({
+      where: { userId: user.id },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        messages: {
+          orderBy: { createdAt: "asc" },
+          take: 50,
+        },
+      },
+    });
+
+    if (!conversation || conversation.messages.length === 0) {
+      return {
+        conversationId: conversation ? conversation.id : null,
+        preferences: null,
+        pendingQuestion: null,
+        messages: [],
+      };
+    }
+
+    const allProductIds = Array.from(
+      new Set(
+        conversation.messages.flatMap((m) => {
+          const meta = m.metadata as { productIds?: string[] } | null;
+          return Array.isArray(meta?.productIds) ? meta.productIds : [];
+        }),
+      ),
+    );
+
+    const productMap = new Map<string, RecommendedProductDto>();
+    if (allProductIds.length > 0) {
+      const liveProducts = await this.fetchLiveRecommendedProducts(allProductIds);
+      liveProducts.forEach((p) => productMap.set(p.id, p));
+    }
+
+    let lastPreferences: ShoppingPreferences | null = null;
+    let lastPendingQuestion: PendingQuestion | null = null;
+
+    const messages: HistoricalChatMessageDto[] = conversation.messages.map((m) => {
+      const role: "user" | "assistant" =
+        m.role === ChatMessageRole.USER ? "user" : "assistant";
+      const meta = m.metadata as {
+        productIds?: string[];
+        preferences?: ShoppingPreferences;
+        pendingQuestion?: PendingQuestion;
+      } | null;
+
+      if (meta?.preferences) {
+        lastPreferences = meta.preferences;
+      }
+      if (meta?.pendingQuestion !== undefined) {
+        lastPendingQuestion = meta.pendingQuestion || null;
+      }
+
+      const pIds = Array.isArray(meta?.productIds) ? meta.productIds : [];
+      const prods = pIds
+        .map((id) => productMap.get(id))
+        .filter((p): p is RecommendedProductDto => Boolean(p));
+
+      return {
+        id: m.id,
+        role,
+        content: m.content,
+        timestamp: m.createdAt.getTime(),
+        products: prods.length > 0 ? prods : undefined,
+      };
+    });
+
+    return {
+      conversationId: conversation.id,
+      preferences: lastPreferences,
+      pendingQuestion: lastPendingQuestion,
+      messages,
+    };
+  }
+
+  private async fetchLiveRecommendedProducts(
+    productIds: string[],
+  ): Promise<RecommendedProductDto[]> {
+    const rawProducts = await this.prisma.product.findMany({
+      where: {
+        id: { in: productIds },
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        basePrice: true,
+        salePrice: true,
+        brand: { select: { name: true } },
+        category: { select: { name: true } },
+        images: {
+          select: { url: true, isPrimary: true, sortOrder: true },
+          orderBy: { sortOrder: "asc" },
+          take: 1,
+        },
+        variants: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            size: true,
+            color: true,
+            inventory: {
+              select: {
+                quantityOnHand: true,
+                reservedQuantity: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return rawProducts.map((p) => {
+      const inStockVariants = (p.variants || []).filter((v) => {
+        const onHand = v.inventory?.quantityOnHand ?? 0;
+        const reserved = v.inventory?.reservedQuantity ?? 0;
+        return onHand - reserved > 0;
+      });
+
+      const availableSizes = Array.from(new Set(inStockVariants.map((v) => v.size))).sort((a, b) => a - b);
+      const primaryImg = p.images.find((img) => img.isPrimary) || p.images[0];
+      const pricing = this.calculateEffectivePrice(p.basePrice, p.salePrice);
+
+      return {
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        brand: p.brand.name,
+        category: p.category.name,
+        price: Number(p.basePrice),
+        originalPrice: pricing.originalPrice,
+        salePrice: p.salePrice ? Number(p.salePrice) : null,
+        displayPrice: pricing.displayPrice,
+        image: primaryImg?.url || "",
+        inStock: inStockVariants.length > 0,
+        availableSizes,
+      };
+    });
+  }
+
+  private normalizeExtractedUpdates(
+    parsed: any,
+    userMessage: string,
+    pendingQuestion: PendingQuestion | null,
+    currentPreferences?: ShoppingPreferences,
+  ): ExtractedDeltaUpdates {
+    const textLower = userMessage.toLowerCase().trim();
+    const updates: ExtractedDeltaUpdates = {};
+
+    // 1. Wearer Relations (Comprehensive Relative Coverage)
+    if (parsed.wearerType) updates.wearerType = parsed.wearerType as WearerType;
+    if (parsed.wearerRelation) updates.wearerRelation = parsed.wearerRelation;
+    if (typeof parsed.age === "number") updates.age = parsed.age;
+    if (parsed.gender) updates.gender = parsed.gender;
+
+    // Wearer relation parsing (Adult relations mapped to WOMEN/MEN, CHILD only with age/child context)
+    if (
+      textLower === "someone else" ||
+      textLower === "for someone else" ||
+      textLower === "someone" ||
+      textLower.includes("someone else") ||
+      textLower.includes("for someone else")
+    ) {
+      updates.wearerType = "OTHER";
+      updates.wearerRelation = null;
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("daughter") || textLower.includes("for my girl")) {
+      updates.wearerRelation = "daughter";
+      updates.gender = updates.age && updates.age <= 12 ? "GIRLS" : "WOMEN";
+      updates.wearerType = updates.age && updates.age <= 12 ? "CHILD" : "OTHER";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("son") || textLower.includes("for my boy")) {
+      updates.wearerRelation = "son";
+      updates.gender = updates.age && updates.age <= 12 ? "BOYS" : "MEN";
+      updates.wearerType = updates.age && updates.age <= 12 ? "CHILD" : "OTHER";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("sister") || textLower.includes("for my sister") || textLower.includes("for my sis")) {
+      updates.wearerRelation = "sister";
+      updates.gender = updates.age && updates.age <= 12 ? "GIRLS" : "WOMEN";
+      updates.wearerType = updates.age && updates.age <= 12 ? "CHILD" : "OTHER";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("brother") || textLower.includes("for my brother") || textLower.includes("for my bro")) {
+      updates.wearerRelation = "brother";
+      updates.gender = updates.age && updates.age <= 12 ? "BOYS" : "MEN";
+      updates.wearerType = updates.age && updates.age <= 12 ? "CHILD" : "OTHER";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("husband") || textLower.includes("for my husband")) {
+      updates.wearerType = "OTHER";
+      updates.wearerRelation = "husband";
+      updates.gender = "MEN";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("wife") || textLower.includes("for my wife")) {
+      updates.wearerType = "OTHER";
+      updates.wearerRelation = "wife";
+      updates.gender = "WOMEN";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("mother") || textLower.includes("for my mom") || textLower.includes("for my mother")) {
+      updates.wearerType = "OTHER";
+      updates.wearerRelation = "mother";
+      updates.gender = "WOMEN";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("father") || textLower.includes("for my dad") || textLower.includes("for my father")) {
+      updates.wearerType = "OTHER";
+      updates.wearerRelation = "father";
+      updates.gender = "MEN";
+      updates.isNewWearerContext = true;
+    } else if (textLower.includes("friend") || textLower.includes("for a friend")) {
+      updates.wearerType = "OTHER";
+      updates.wearerRelation = "friend";
+      updates.isNewWearerContext = true;
+    } else if (
+      textLower.includes("myself") ||
+      textLower.includes("for me") ||
+      textLower.includes("for self") ||
+      textLower.includes("buying shoes for myself")
+    ) {
+      updates.wearerType = "SELF";
+      updates.wearerRelation = "myself";
+      updates.isNewWearerContext = currentPreferences?.wearer?.type === "CHILD";
+    }
+
+    // Gender vs Purpose Separation (Step 9)
+    if (textLower.includes("men shoes") || textLower.includes("men's shoes") || textLower.includes("for men") || textLower === "men") {
+      updates.gender = "MEN";
+      if (!updates.wearerType && !currentPreferences?.wearer?.relation) updates.wearerType = "SELF";
+    } else if (textLower.includes("women shoes") || textLower.includes("women's shoes") || textLower.includes("for women") || textLower === "women") {
+      updates.gender = "WOMEN";
+      if (!updates.wearerType && !currentPreferences?.wearer?.relation) updates.wearerType = "SELF";
+    }
+
+    // Age parsing
+    if (pendingQuestion?.field === "AGE") {
+      const directAgeMatch =
+        textLower.match(/^(\d{1,2})\s*(?:years?(?:\s*[-]?\s*old)?|yo|yr|year)?$/i) ||
+        textLower.match(/(\d{1,2})\s*(?:years?(?:\s*[-]?\s*old)?|yo|yr|year)/i) ||
+        textLower.match(/she\s*is\s*(\d{1,2})/i) ||
+        textLower.match(/he\s*is\s*(\d{1,2})/i) ||
+        textLower.match(/(\d{1,2})/);
+      if (directAgeMatch) {
+        updates.age = parseInt(directAgeMatch[1], 10);
+        updates.wearerType = updates.age <= 12 ? "CHILD" : "OTHER";
+      }
+    } else {
+      const ageMatch =
+        textLower.match(/(\d+)\s*[-]?\s*(?:years?(?:\s*[-]?\s*old)?|yo|yr|year|age)/i) ||
+        textLower.match(/age\s*[:=]?\s*(\d+)/i) ||
+        textLower.match(/she\s*is\s*(\d{1,2})/i) ||
+        textLower.match(/he\s*is\s*(\d{1,2})/i);
+      if (ageMatch) {
+        updates.age = parseInt(ageMatch[1], 10);
+        updates.wearerType = updates.age <= 12 ? "CHILD" : "OTHER";
+      }
+    }
+
+    // 2. Strict Contextual Size Extraction & Normalization (Canonical number | null, NO silent conversions)
+    if (pendingQuestion?.field !== "AGE") {
+      let candidateSize: string | null = null;
+      let detectedSystemHint: "US" | "UK" | "EU" | null = null;
+
+      // Explicit system prefix match: "US size 8", "US 8", "UK 7", "EU 39", "8 US", "7 UK", "39 EU"
+      const systemPrefixMatch =
+        textLower.match(/\b(us|uk|eu)\s*(?:size)?\s*[:=]?\s*(\d{1,2}(?:\.\d)?)\b/i) ||
+        textLower.match(/\b(\d{1,2}(?:\.\d)?)\s*(us|uk|eu)\b/i);
+
+      if (systemPrefixMatch) {
+        const isPrefix = ["us", "uk", "eu"].includes(systemPrefixMatch[1].toLowerCase());
+        detectedSystemHint = (isPrefix ? systemPrefixMatch[1] : systemPrefixMatch[2]).toUpperCase() as "US" | "UK" | "EU";
+        candidateSize = isPrefix ? systemPrefixMatch[2] : systemPrefixMatch[1];
+        updates.sizeSystemHint = detectedSystemHint;
+      } else {
+        // Check for correction pattern: "I said 38, not 3838", "not 49, 39", "38 not 3838", "actually 39"
+        const beforeNotMatch = textLower.match(/(\d{1,2}(?:\.\d)?)\s*,?\s*not\s*\d+/i);
+        const afterNotMatch = textLower.match(/not\s*\d+[,]?\s*(\d{1,2}(?:\.\d)?)/i);
+        const saidCorrectionMatch = textLower.match(/(?:i said|actually|mean|meant)\s*(\d{1,2}(?:\.\d)?)/i);
+
+        if (beforeNotMatch) {
+          candidateSize = beforeNotMatch[1];
+          updates.isCorrection = true;
+        } else if (afterNotMatch) {
+          candidateSize = afterNotMatch[1];
+          updates.isCorrection = true;
+        } else if (saidCorrectionMatch) {
+          candidateSize = saidCorrectionMatch[1];
+          updates.isCorrection = true;
+        } else if (parsed.size) {
+          candidateSize = String(parsed.size);
+        } else {
+          const sizeMatch =
+            textLower.match(/(?:size|sz)\s*[:=]?\s*(\d{1,2}(?:\.\d)?)/i) ||
+            textLower.match(/(?:actually|try|change\s*to|make\s*it|wear)?\s*\b([3-9]|1[0-4]|2[0-9]|3[0-9]|4[0-9]|50)\b/i) ||
+            textLower.match(/^(\d{1,2})$/);
+          if (
+            sizeMatch &&
+            (pendingQuestion?.field === "SIZE" ||
+              textLower.includes("size") ||
+              textLower.includes("sz") ||
+              textLower.includes("actually") ||
+              textLower.match(/\b\d{1,2}\b/))
+          ) {
+            candidateSize = sizeMatch[1];
+          }
+        }
+      }
+
+      if (candidateSize) {
+        const num = parseFloat(candidateSize.trim());
+        updates.rawSizeInput = candidateSize;
+
+        // Valid direct EU size (35 to 50)
+        if (!isNaN(num) && num >= 35 && num <= 50 && (!detectedSystemHint || detectedSystemHint === "EU")) {
+          updates.size = Math.round(num);
+          updates.sizeSystemHint = "EU";
+        } else {
+          // Ambiguous small size or non-EU sizing (e.g. 8, 7, US 8, UK 7): DO NOT SILENTLY CONVERT
+          updates.size = null;
+          updates.isAmbiguousSmallSize = true;
+        }
+      }
+    }
+
+    // 3. Purpose Normalization
+    if (parsed.purpose) {
+      updates.purpose = parsed.purpose.toUpperCase() as ShoePurpose;
+    } else {
+      if (textLower.includes("formal") || textLower.includes("office") || textLower.includes("dress") || textLower.includes("wedding")) {
+        updates.purpose = "FORMAL";
+      } else if (textLower.includes("running") || textLower.includes("jogging")) {
+        updates.purpose = "RUNNING";
+      } else if (textLower.includes("sport") || textLower.includes("gym") || textLower.includes("training") || textLower.includes("athletic") || textLower.includes("sporty")) {
+        updates.purpose = "SPORTS";
+      } else if (textLower.includes("everyday") || textLower.includes("daily") || textLower.includes("lifestyle")) {
+        updates.purpose = "EVERYDAY";
+      } else if (textLower.includes("casual")) {
+        updates.purpose = "CASUAL";
+      }
+    }
+
+    // 4. Budget Normalization
+    if (typeof parsed.budgetMax === "number") updates.budgetMax = parsed.budgetMax;
+    if (typeof parsed.budgetMin === "number") updates.budgetMin = parsed.budgetMin;
+
+    const budgetMatch = textLower.match(/(?:under|below|max|budget)\s*(?:pkr|rs\.?)?\s*(\d+)/i);
+    if (budgetMatch) {
+      updates.budgetMax = parseInt(budgetMatch[1], 10);
+    }
+
+    // 5. Brand Normalization (with Typo Resilience)
+    const knownBrands = ["Nike", "Adidas", "Puma", "ASICS", "New Balance", "Reebok", "Skechers"];
+    const brandAliases: Record<string, string> = {
+      "nik": "Nike",
+      "nike": "Nike",
+      "adiddas": "Adidas",
+      "addidas": "Adidas",
+      "adidas": "Adidas",
+      "puma": "Puma",
+      "asics": "ASICS",
+      "reebok": "Reebok",
+      "rebok": "Reebok",
+      "new balance": "New Balance",
+      "newbalance": "New Balance",
+      "nb": "New Balance",
+      "skechers": "Skechers",
+      "sketchers": "Skechers",
+    };
+
+    for (const [alias, canonical] of Object.entries(brandAliases)) {
+      const regex = new RegExp(`\\b${alias}\\b`, "i");
+      if (regex.test(textLower)) {
+        updates.brand = canonical;
+        break;
+      }
+    }
+
+    if (!updates.brand) {
+      for (const b of knownBrands) {
+        if (textLower.includes(b.toLowerCase())) {
+          updates.brand = b;
+          break;
+        }
+      }
+    }
+
+    if (!updates.brand && parsed.brand && typeof parsed.brand === "string" && parsed.brand.trim().length > 0) {
+      updates.brand = parsed.brand.trim();
+    }
+
+    if (!updates.brand) {
+      const brandWordMatch = textLower.match(/\b([a-z0-9_-]+)\s+(?:sports|running|casual|formal|gym|sneakers?|shoes?)\b/i);
+      if (brandWordMatch) {
+        const candidateBrand = brandWordMatch[1].toLowerCase();
+        const nonBrandWords = [
+          "men", "mens", "women", "womens", "boy", "boys", "girl", "girls", "kid", "kids",
+          "black", "white", "blue", "red", "green", "grey", "gray", "brown", "beige", "navy",
+          "cheap", "cheaper", "best", "new", "top", "good", "some", "any", "show", "find",
+          "need", "want", "running", "runner", "sports", "sport", "sporty", "casual", "formal", "gym",
+          "everyday", "daily", "lifestyle", "comfort", "outdoor", "stylish", "nice", "cool", "looking",
+          "yeah", "yes", "sure", "ok", "fine", "instead", "actually", "for", "with", "pair", "size", "under", "below"
+        ];
+        if (!nonBrandWords.includes(candidateBrand) && candidateBrand.length > 2) {
+          updates.brand = brandWordMatch[1];
+        }
+      }
+    }
+
+    // 6. Color Normalization
+    if (parsed.color) updates.color = parsed.color;
+    const knownColors = ["black", "white", "blue", "red", "green", "grey", "brown", "beige", "navy"];
+    for (const c of knownColors) {
+      if (textLower.includes(c)) {
+        updates.color = c;
+        break;
+      }
+    }
+
+    // 7. Explicit Cleared Fields
+    const cleared: Array<"brand" | "color" | "budget" | "size" | "purpose"> = [];
+    if (textLower.includes("no brand") || textLower.includes("any brand") || textLower.includes("without brand")) {
+      cleared.push("brand");
+    }
+    if (textLower.includes("any color") || textLower.includes("no color preference")) {
+      cleared.push("color");
+    }
+    if (textLower.includes("no budget") || textLower.includes("any price")) {
+      cleared.push("budget");
+    }
+    if (cleared.length > 0) {
+      updates.clearedFields = cleared;
+    }
+
+    // 8. Ambiguity, Relaxation, and Proactive Suggestion flags
+    updates.isAmbiguousAffirmation = Boolean(parsed.isAmbiguousAffirmation);
+    updates.isAffirmativeRelaxation = Boolean(
+      parsed.isAffirmativeRelaxation ||
+      textLower.includes("casual is fine") ||
+      textLower.includes("yeah casual is fine") ||
+      textLower.includes("sure casual")
+    );
+    updates.isNewWearerContext = Boolean(parsed.isNewWearerContext || updates.isNewWearerContext);
+    updates.isCorrection = Boolean(parsed.isCorrection || updates.isCorrection);
+    updates.isProactiveSuggestionRequest = Boolean(
+      parsed.isProactiveSuggestionRequest ||
+        textLower.includes("suggest") ||
+        textLower.includes("popular") ||
+        textLower.includes("what do you have"),
+    );
+
+    // 9. Natural Language Phrasing Payload (Phase 3)
+    if (parsed.language && typeof parsed.language === "object") {
+      updates.language = {
+        acknowledgement: parsed.language.acknowledgement || null,
+        question: parsed.language.question || null,
+        naturalReply: parsed.language.naturalReply || null,
+      };
+    }
+
+    return updates;
+  }
+
+  private extractFallbackUpdates(
+    userMessage: string,
+    pendingQuestion: PendingQuestion | null,
+    currentPreferences?: ShoppingPreferences,
+  ): ExtractedDeltaUpdates {
+    return this.normalizeExtractedUpdates({}, userMessage, pendingQuestion, currentPreferences);
+  }
+
+  private sanitizePreferences(prefs?: Partial<ShoppingPreferences>): ShoppingPreferences {
+    if (!prefs || typeof prefs !== "object") {
+      return { version: 3 };
+    }
+
+    const wearer: WearerInfo | null = prefs.wearer
+      ? {
+          type: prefs.wearer.type || null,
+          relation: prefs.wearer.relation || null,
+          age: typeof prefs.wearer.age === "number" ? prefs.wearer.age : null,
+          gender: prefs.wearer.gender || null,
+        }
+      : null;
+
+    let cleanSize: number | null = null;
+    if (typeof prefs.size === "number") {
+      cleanSize = isNaN(prefs.size) ? null : prefs.size;
+    } else if (prefs.size !== undefined && prefs.size !== null) {
+      const parsedNum = parseInt(String(prefs.size).replace(/\D/g, "").slice(0, 2), 10);
+      if (!isNaN(parsedNum)) {
+        cleanSize = parsedNum;
+      }
+    }
+
+    return {
+      version: 3,
+      intent: prefs.intent || null,
+      wearer,
+      size: cleanSize,
+      rawSizeInput: prefs.rawSizeInput || null,
+      sizeSystem: prefs.sizeSystem || null,
+      purpose: (prefs.purpose as ShoePurpose) || null,
+      budgetMin: typeof prefs.budgetMin === "number" ? prefs.budgetMin : null,
+      budgetMax: typeof prefs.budgetMax === "number" ? prefs.budgetMax : null,
+      brand: typeof prefs.brand === "string" ? prefs.brand : null,
+      color: typeof prefs.color === "string" ? prefs.color : null,
+      style: typeof prefs.style === "string" ? prefs.style : null,
+      comfort: typeof prefs.comfort === "string" ? prefs.comfort : null,
+      comfortPreference: typeof prefs.comfortPreference === "string" ? prefs.comfortPreference : null,
+      other: typeof prefs.other === "string" ? prefs.other : null,
+      isRelaxationApproved: Boolean(prefs.isRelaxationApproved),
+      age: typeof prefs.age === "number" ? prefs.age : wearer?.age || null,
+      gender: typeof prefs.gender === "string" ? prefs.gender : wearer?.gender || null,
+      pendingQuestion: prefs.pendingQuestion || null,
+      nextAction: prefs.nextAction || null,
+    };
+  }
+}

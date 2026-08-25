@@ -80,6 +80,19 @@ export class PublicProductQueryDto {
   @IsOptional()
   maxPrice?: number;
 
+  @ApiPropertyOptional({ description: "Filter products by size" })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(60)
+  @IsOptional()
+  size?: number;
+
+  @ApiPropertyOptional({ description: "Filter products by color" })
+  @IsString()
+  @IsOptional()
+  color?: string;
+
   @ApiPropertyOptional({
     enum: ["newest", "price-asc", "price-desc", "name-asc", "name-desc"],
     default: "newest",

@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
+import compression from "compression";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 import { requestSafetyMiddleware } from "./security/request-safety.middleware";
@@ -25,6 +26,7 @@ async function bootstrap() {
     configService.get<string>("FRONTEND_URL"),
   ].filter((url): url is string => Boolean(url));
 
+  app.use(compression({ threshold: 512 }));
   app.use(helmet());
   app.use(cookieParser());
   app.use(requestSafetyMiddleware);

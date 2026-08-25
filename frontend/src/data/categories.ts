@@ -1,6 +1,6 @@
-﻿import menImage from "../assets/images/category-men.png";
-import womenImage from "../assets/images/category-women.png";
-import sportsImage from "../assets/images/category-sports.png";
+import menImage from "../assets/images/category-men.webp";
+import womenImage from "../assets/images/category-women.webp";
+import sportsImage from "../assets/images/category-sports.webp";
 
 export interface Category {
   id: number;

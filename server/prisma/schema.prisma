@@ -44,6 +44,7 @@ model User {
   returnRequests                ReturnRequest[]          @relation("UserReturnRequests")
   reviewedReturnRequests        ReturnRequest[]          @relation("ReturnReviewedBy")
   auditLogs                     AuditLog[]               @relation("AuditLogActor")
+  chatConversations             ChatConversation[]
 }
 
 model UserIdentity {
@@ -726,6 +727,38 @@ model HomepageBenefit {
   @@index([settingsId, sortOrder])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 10 – Shopping Assistant Chat History
+// ─────────────────────────────────────────────────────────────────────────────
 
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+}
 
+model ChatConversation {
+  id        String        @id @default(cuid())
+  userId    String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@index([userId])
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           ChatMessageRole
+  content        String           @db.Text
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([conversationId, createdAt])
+}

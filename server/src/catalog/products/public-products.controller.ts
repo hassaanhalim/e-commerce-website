@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, Get, Header, Param, Query } from "@nestjs/common";
 import { ApiBadRequestResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Public } from "../../auth/decorators/public.decorator";
 import { PublicProductsService } from "./public-products.service";
@@ -11,6 +11,7 @@ export class PublicProductsController {
   constructor(private readonly productsService: PublicProductsService) {}
 
   @Get()
+  @Header("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
   @ApiOperation({ summary: "List active catalog products with filtering and pagination (Public)" })
   @ApiOkResponse({ description: "Products listed successfully." })
   @ApiBadRequestResponse({ description: "Invalid query parameters or price range." })
@@ -19,6 +20,7 @@ export class PublicProductsController {
   }
 
   @Get(":slug")
+  @Header("Cache-Control", "public, max-age=30, stale-while-revalidate=120")
   @ApiOperation({ summary: "Get detailed catalog product by slug (Public)" })
   @ApiOkResponse({ description: "Product details retrieved successfully." })
   @ApiNotFoundResponse({ description: "Product not found or inactive." })

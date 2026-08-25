@@ -53,6 +53,21 @@ export class PublicProductsService {
       ];
     }
 
+    if (query.size !== undefined || query.color?.trim()) {
+      where.variants = {
+        some: {
+          isActive: true,
+          ...(query.size !== undefined ? { size: query.size } : {}),
+          ...(query.color?.trim()
+            ? { color: { equals: query.color.trim(), mode: "insensitive" } }
+            : {}),
+          inventory: {
+            quantityOnHand: { gt: 0 },
+          },
+        },
+      };
+    }
+
     if (query.minPrice !== undefined || query.maxPrice !== undefined) {
       const min = query.minPrice ?? 0;
       const max = query.maxPrice ?? Number.MAX_SAFE_INTEGER;
@@ -209,15 +224,44 @@ export class PublicProductsService {
         category: { isActive: true },
         brand: { isActive: true },
       },
-      include: {
-        category: true,
-        brand: true,
+      select: {
+        id: true,
+        productCode: true,
+        name: true,
+        slug: true,
+        description: true,
+        basePrice: true,
+        salePrice: true,
+        gender: true,
+        isNew: true,
+        isFeatured: true,
+        categoryId: true,
+        brandId: true,
+        createdAt: true,
+        updatedAt: true,
+        category: {
+          select: { id: true, name: true, slug: true },
+        },
+        brand: {
+          select: { id: true, name: true, slug: true },
+        },
         variants: {
           where: { isActive: true },
-          include: { inventory: true },
+          select: {
+            id: true,
+            sku: true,
+            size: true,
+            color: true,
+            price: true,
+            isActive: true,
+            inventory: {
+              select: { quantityOnHand: true, reservedQuantity: true },
+            },
+          },
           orderBy: { size: "asc" },
         },
         images: {
+          select: { id: true, url: true, altText: true, sortOrder: true, isPrimary: true },
           orderBy: { sortOrder: "asc" },
         },
       },
