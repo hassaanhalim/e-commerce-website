@@ -94,6 +94,7 @@ export interface ProductSearchConstraints {
   budgetMax: number | null;
   brand: string | null;
   color: string | null;
+  style?: string | null;
   isRelaxationApproved?: boolean;
 }
 

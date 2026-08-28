@@ -305,7 +305,26 @@ export class ShoppingAssistantService {
               policyResult.mergedPreferences.age <= 12) ||
             (requestedSizeNum !== null && requestedSizeNum < 36);
 
-          if (isFormal) {
+          const isStylingAdviceQuery =
+            userMessage.toLowerCase().includes("what shoes should") ||
+            userMessage.toLowerCase().includes("what should i wear") ||
+            userMessage.toLowerCase().includes("which shoes") ||
+            userMessage.toLowerCase().includes("can i wear") ||
+            userMessage.toLowerCase().includes("how should") ||
+            userMessage.toLowerCase().includes("beach") ||
+            userMessage.toLowerCase().includes("dinner") ||
+            userMessage.toLowerCase().includes("party");
+
+          if (isStylingAdviceQuery && extractedUpdates.language?.naturalReply) {
+            finalResponse = {
+              conversationId,
+              message: extractedUpdates.language.naturalReply,
+              preferences: policyResult.mergedPreferences,
+              pendingQuestion: null,
+              readyForRecommendations: false,
+              products: [],
+            };
+          } else if (isFormal) {
             const sizeNote = policyResult.mergedPreferences.size ? ` in size ${policyResult.mergedPreferences.size}` : "";
             finalResponse = {
               conversationId,
@@ -569,7 +588,10 @@ export class ShoppingAssistantService {
     if (topic === "SHIPPING" || textLower.includes("delivery") || textLower.includes("shipping") || textLower.includes("how long")) {
       return "Standard delivery takes 2 to 4 business days across Pakistan. We offer free shipping on all orders over PKR 5,000.";
     }
-    if (topic === "PAYMENT" || textLower.includes("pay") || textLower.includes("cod") || textLower.includes("cash on delivery") || textLower.includes("card")) {
+    if (topic === "PAYMENT" || textLower.includes("pay") || textLower.includes("cod") || textLower.includes("cash on delivery") || textLower.includes("card") || textLower.includes("bitcoin") || textLower.includes("crypto")) {
+      if (textLower.includes("crypto") || textLower.includes("bitcoin")) {
+        return "We accept Cash on Delivery (COD), Credit/Debit Cards (Visa/Mastercard), and direct bank transfers. We do not support cryptocurrency or Bitcoin at this time.";
+      }
       return "We accept Cash on Delivery (COD), Credit/Debit Cards (Visa/Mastercard), and direct bank transfers at checkout.";
     }
     if (topic === "WARRANTY" || textLower.includes("warranty") || textLower.includes("guarantee") || textLower.includes("authentic")) {
@@ -813,8 +835,11 @@ export class ShoppingAssistantService {
       textLower.includes("delivery") ||
       textLower.includes("shipping") ||
       textLower.includes("how long delivery") ||
-      textLower.includes("payment method") ||
+      textLower.includes("payment") ||
       textLower.includes("cash on delivery") ||
+      textLower.includes("bitcoin") ||
+      textLower.includes("crypto") ||
+      textLower.includes("how to pay") ||
       textLower.includes("warranty") ||
       extracted?.storeInfoTopic
     ) {
@@ -907,6 +932,9 @@ export class ShoppingAssistantService {
       textLower.includes("how to measure") ||
       textLower.includes("what kind") ||
       textLower.includes("which shoes") ||
+      textLower.includes("what shoes should") ||
+      textLower.includes("what should i wear") ||
+      textLower.includes("can i wear") ||
       textLower.includes("difference between") ||
       textLower.includes("how should") ||
       textLower.includes("flat feet") ||
@@ -916,6 +944,12 @@ export class ShoppingAssistantService {
       textLower.includes("plantar") ||
       textLower.includes("tips") ||
       textLower.includes("advice") ||
+      textLower.includes("joke") ||
+      textLower.includes("fun fact") ||
+      textLower.includes("human or") ||
+      textLower.includes("who made you") ||
+      textLower.includes("tiring day") ||
+      textLower.includes("long day") ||
       extracted?.intent === "GENERAL_SHOE_HELP" ||
       extracted?.intent === "PRODUCT_QUESTION"
     ) {
@@ -995,6 +1029,21 @@ export class ShoppingAssistantService {
       merged.age = merged.wearer.age;
       merged.gender = merged.wearer.gender;
       merged.isRelaxationApproved = false;
+
+      // Clean context reset when explicitly switching context or returning to self
+      if (
+        updates.intent === "NEW_SHOPPING_CONTEXT" ||
+        textLower.includes("forget that") ||
+        textLower.includes("start over") ||
+        (isSelf && currentState.wearer && currentState.wearer.type !== "SELF")
+      ) {
+        merged.purpose = updates.purpose ?? null;
+        merged.style = updates.style ?? null;
+        merged.brand = updates.brand ?? null;
+        merged.color = updates.color ?? null;
+        merged.budgetMax = updates.budgetMax ?? null;
+        merged.budgetMin = updates.budgetMin ?? null;
+      }
     } else {
       // Merge wearer updates if provided
       if (updates.wearerType || updates.wearerRelation || updates.age !== null || updates.gender) {
@@ -1617,6 +1666,7 @@ export class ShoppingAssistantService {
       budgetMax: preferences.budgetMax ?? null,
       brand: preferences.brand ? preferences.brand.trim() : null,
       color: preferences.color ? preferences.color.toLowerCase().trim() : null,
+      style: preferences.style ? preferences.style.toLowerCase().trim() : null,
       isRelaxationApproved: Boolean(preferences.isRelaxationApproved),
     };
   }
@@ -1690,15 +1740,46 @@ export class ShoppingAssistantService {
       return { valid: false, reason: "Product is not men/unisex compatible" };
     }
 
-    // 4. HARD: Purpose Taxonomy Compatibility
+    // 4. HARD: Style / Sub-Type Validation
     const pSlug = product.category.slug.toLowerCase();
     const pName = product.name.toLowerCase();
+
+    if (constraints.style) {
+      const s = constraints.style.toLowerCase();
+      if (s.includes("loafer") || s.includes("moccasin")) {
+        if (!pName.includes("loafer") && !pName.includes("moccasin") && !pName.includes("slip-on")) {
+          return { valid: false, reason: "Product is not a loafer or moccasin" };
+        }
+      } else if (s.includes("heel") || s.includes("pump") || s.includes("stiletto") || s.includes("wedge")) {
+        if (!pName.includes("heel") && !pName.includes("pump") && !pName.includes("stiletto") && !pName.includes("wedge")) {
+          return { valid: false, reason: "Product is not a heel or pump" };
+        }
+      } else if (s.includes("boot") || s.includes("chelsea") || s.includes("chukka")) {
+        if (!pName.includes("boot") && !pName.includes("chelsea") && !pName.includes("chukka")) {
+          return { valid: false, reason: "Product is not a boot" };
+        }
+      } else if (s.includes("flat") || s.includes("ballet") || s.includes("mule")) {
+        if (!pName.includes("flat") && !pName.includes("ballet") && !pName.includes("mule")) {
+          return { valid: false, reason: "Product is not a flat" };
+        }
+      } else if (s.includes("football") || s.includes("cleat") || s.includes("soccer") || s.includes("futsal")) {
+        if (!pName.includes("football") && !pName.includes("cleat") && !pName.includes("soccer") && !pName.includes("futsal") && !pName.includes("mercurial") && !pName.includes("predator")) {
+          return { valid: false, reason: "Product is not a football boot/cleat" };
+        }
+      }
+    }
+
+    // 5. HARD: Purpose Taxonomy Compatibility
     if (constraints.purpose === "FORMAL") {
       const isTrueFormal =
         pSlug === "formal" ||
         pSlug === "dress" ||
         pName.includes("formal") ||
-        pName.includes("oxford");
+        pName.includes("oxford") ||
+        pName.includes("brogue") ||
+        pName.includes("derby") ||
+        pName.includes("loafer") ||
+        pName.includes("monk");
       if (!isTrueFormal) {
         return { valid: false, reason: "Product is not a formal shoe" };
       }
@@ -1707,7 +1788,11 @@ export class ShoppingAssistantService {
         pSlug === "sports" ||
         pName.includes("run") ||
         pName.includes("running") ||
-        pName.includes("runner");
+        pName.includes("runner") ||
+        pName.includes("pegasus") ||
+        pName.includes("ultraboost") ||
+        pName.includes("ghost") ||
+        pName.includes("kayano");
       if (!isRunning) {
         return { valid: false, reason: "Product is not running-compatible" };
       }
@@ -1717,13 +1802,15 @@ export class ShoppingAssistantService {
         pName.includes("sport") ||
         pName.includes("gym") ||
         pName.includes("train") ||
-        pName.includes("run");
+        pName.includes("run") ||
+        pName.includes("metcon") ||
+        pName.includes("nano");
       if (!isSports) {
         return { valid: false, reason: "Product is not sports-compatible" };
       }
     }
 
-    // 5. HARD: Find Active Matching Variant with Positive Stock (> 0)
+    // 6. HARD: Find Active Matching Variant with Positive Stock (> 0)
     const inStockMatchingVariants = (product.variants || []).filter((v) => {
       if (!v.isActive) return false;
       const onHand = v.inventory?.quantityOnHand ?? 0;
@@ -1746,7 +1833,7 @@ export class ShoppingAssistantService {
     const matchedVariant = inStockMatchingVariants[0];
     const availableQuantity = (matchedVariant.inventory?.quantityOnHand ?? 0) - (matchedVariant.inventory?.reservedQuantity ?? 0);
 
-    // 6. HARD: Effective Price within Budget Bounds
+    // 7. HARD: Effective Price within Budget Bounds
     const pricing = this.calculateEffectivePrice(product.basePrice, product.salePrice);
     if (constraints.budgetMax !== null && pricing.displayPrice > constraints.budgetMax) {
       return { valid: false, reason: `Price ${pricing.displayPrice} exceeds max budget ${constraints.budgetMax}` };
@@ -1798,11 +1885,91 @@ export class ShoppingAssistantService {
       },
     };
 
-    // Category / Purpose filter
-    if (constraints.purpose === "FORMAL") {
+    // Specific shoe sub-type / style filter
+    const styleQuery = (constraints.style || "").toLowerCase();
+    let styleOrFilters: Prisma.ProductWhereInput[] | null = null;
+
+    if (styleQuery.includes("loafer") || styleQuery.includes("moccasin")) {
+      styleOrFilters = [
+        { name: { contains: "loafer", mode: "insensitive" } },
+        { name: { contains: "moccasin", mode: "insensitive" } },
+        { description: { contains: "loafer", mode: "insensitive" } },
+        { description: { contains: "moccasin", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("heel") || styleQuery.includes("pump") || styleQuery.includes("stiletto") || styleQuery.includes("wedge")) {
+      styleOrFilters = [
+        { name: { contains: "heel", mode: "insensitive" } },
+        { name: { contains: "pump", mode: "insensitive" } },
+        { name: { contains: "stiletto", mode: "insensitive" } },
+        { name: { contains: "wedge", mode: "insensitive" } },
+        { description: { contains: "heel", mode: "insensitive" } },
+        { description: { contains: "pump", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("boot") || styleQuery.includes("chelsea") || styleQuery.includes("chukka")) {
+      styleOrFilters = [
+        { name: { contains: "boot", mode: "insensitive" } },
+        { name: { contains: "chelsea", mode: "insensitive" } },
+        { name: { contains: "chukka", mode: "insensitive" } },
+        { description: { contains: "boot", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("flat") || styleQuery.includes("ballet") || styleQuery.includes("mule")) {
+      styleOrFilters = [
+        { name: { contains: "flat", mode: "insensitive" } },
+        { name: { contains: "ballet", mode: "insensitive" } },
+        { name: { contains: "mule", mode: "insensitive" } },
+        { description: { contains: "flat", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("sandal") || styleQuery.includes("slide")) {
+      styleOrFilters = [
+        { name: { contains: "sandal", mode: "insensitive" } },
+        { name: { contains: "slide", mode: "insensitive" } },
+        { description: { contains: "sandal", mode: "insensitive" } },
+        { description: { contains: "slide", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("football") || styleQuery.includes("cleat") || styleQuery.includes("soccer") || styleQuery.includes("futsal")) {
+      styleOrFilters = [
+        { name: { contains: "football", mode: "insensitive" } },
+        { name: { contains: "cleat", mode: "insensitive" } },
+        { name: { contains: "soccer", mode: "insensitive" } },
+        { name: { contains: "futsal", mode: "insensitive" } },
+        { description: { contains: "football", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("tennis")) {
+      styleOrFilters = [
+        { name: { contains: "tennis", mode: "insensitive" } },
+        { description: { contains: "tennis", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("training") || styleQuery.includes("gym") || styleQuery.includes("cross-train") || styleQuery.includes("lifter")) {
+      styleOrFilters = [
+        { name: { contains: "training", mode: "insensitive" } },
+        { name: { contains: "gym", mode: "insensitive" } },
+        { name: { contains: "cross-train", mode: "insensitive" } },
+        { name: { contains: "lifter", mode: "insensitive" } },
+        { description: { contains: "training", mode: "insensitive" } },
+      ];
+    } else if (styleQuery.includes("oxford") || styleQuery.includes("brogue") || styleQuery.includes("derby") || styleQuery.includes("monk strap")) {
+      styleOrFilters = [
+        { name: { contains: "oxford", mode: "insensitive" } },
+        { name: { contains: "brogue", mode: "insensitive" } },
+        { name: { contains: "derby", mode: "insensitive" } },
+        { name: { contains: "monk strap", mode: "insensitive" } },
+        { description: { contains: "oxford", mode: "insensitive" } },
+      ];
+    }
+
+    if (styleOrFilters) {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : []),
+        { OR: styleOrFilters },
+      ];
+    } else if (constraints.purpose === "FORMAL") {
       where.OR = [
         { category: { slug: { in: ["formal", "dress"] } } },
         { name: { contains: "formal", mode: "insensitive" } },
+        { name: { contains: "oxford", mode: "insensitive" } },
+        { name: { contains: "brogue", mode: "insensitive" } },
+        { name: { contains: "derby", mode: "insensitive" } },
+        { name: { contains: "loafer", mode: "insensitive" } },
         { description: { contains: "formal", mode: "insensitive" } },
         { description: { contains: "oxford", mode: "insensitive" } },
       ];
@@ -2277,17 +2444,29 @@ export class ShoppingAssistantService {
       let candidateSize: string | null = null;
       let detectedSystemHint: "US" | "UK" | "EU" | null = null;
 
+      const hasExplicitSizeKeyword =
+        textLower.includes("size") ||
+        textLower.includes("sz") ||
+        textLower.includes("shoe size") ||
+        textLower.includes("wear") ||
+        textLower.includes("eu") ||
+        textLower.includes("us") ||
+        textLower.includes("uk");
+
+      const isSizeQuestionPending = pendingQuestion?.field === "SIZE";
+      const isDistanceMeasurement = /\b\d+\s*(?:km|kms|kilometer|kilometers|mile|miles)\b/i.test(textLower);
+
       // Explicit system prefix match: "US size 8", "US 8", "UK 7", "EU 39", "8 US", "7 UK", "39 EU"
       const systemPrefixMatch =
         textLower.match(/\b(us|uk|eu)\s*(?:size)?\s*[:=]?\s*(\d{1,2}(?:\.\d)?)\b/i) ||
         textLower.match(/\b(\d{1,2}(?:\.\d)?)\s*(us|uk|eu)\b/i);
 
-      if (systemPrefixMatch) {
+      if (systemPrefixMatch && !isDistanceMeasurement) {
         const isPrefix = ["us", "uk", "eu"].includes(systemPrefixMatch[1].toLowerCase());
         detectedSystemHint = (isPrefix ? systemPrefixMatch[1] : systemPrefixMatch[2]).toUpperCase() as "US" | "UK" | "EU";
         candidateSize = isPrefix ? systemPrefixMatch[2] : systemPrefixMatch[1];
         updates.sizeSystemHint = detectedSystemHint;
-      } else {
+      } else if (!isDistanceMeasurement) {
         // Check for correction pattern: "I said 38, not 3838", "not 49, 39", "38 not 3838", "actually 39"
         const beforeNotMatch = textLower.match(/(\d{1,2}(?:\.\d)?)\s*,?\s*not\s*\d+/i);
         const afterNotMatch = textLower.match(/not\s*\d+[,]?\s*(\d{1,2}(?:\.\d)?)/i);
@@ -2303,22 +2482,15 @@ export class ShoppingAssistantService {
         } else if (saidCorrectionMatch) {
           candidateSize = saidCorrectionMatch[1];
           updates.isCorrection = true;
-        } else if (pureNumberMatch) {
+        } else if (pureNumberMatch && (isSizeQuestionPending || hasExplicitSizeKeyword)) {
           candidateSize = pureNumberMatch[1];
-        } else if (parsed.size) {
+        } else if (parsed.size && (isSizeQuestionPending || hasExplicitSizeKeyword || (Number(parsed.size) >= 36 && Number(parsed.size) <= 44))) {
           candidateSize = String(parsed.size);
-        } else {
+        } else if (hasExplicitSizeKeyword || isSizeQuestionPending) {
           const sizeMatch =
             textLower.match(/(?:size|sz)\s*[:=]?\s*(-?\d+(?:\.\d+)?)/i) ||
             textLower.match(/(?:actually|try|change\s*to|make\s*it|wear)?\s*\b([3-9]|1[0-4]|2[0-9]|3[0-9]|4[0-9]|50)\b/i);
-          if (
-            sizeMatch &&
-            (pendingQuestion?.field === "SIZE" ||
-              textLower.includes("size") ||
-              textLower.includes("sz") ||
-              textLower.includes("actually") ||
-              textLower.match(/\b\d{1,2}\b/))
-          ) {
+          if (sizeMatch) {
             candidateSize = sizeMatch[1];
           }
         }
@@ -2342,13 +2514,12 @@ export class ShoppingAssistantService {
           updates.size = null;
           updates.isAmbiguousSmallSize = true;
           updates.isInvalidSize = false;
-        } else {
-          // Out of range or negative number (e.g. 67, 90, -1, 100, etc.)
+        } else if (isSizeQuestionPending || hasExplicitSizeKeyword) {
+          // Explicitly invalid size when asked or stated as size
           updates.size = null;
           updates.isInvalidSize = true;
           updates.isAmbiguousSmallSize = false;
         }
-
       }
     }
 
@@ -2356,15 +2527,15 @@ export class ShoppingAssistantService {
     if (parsed.purpose) {
       updates.purpose = parsed.purpose.toUpperCase() as ShoePurpose;
     } else {
-      if (textLower.includes("formal") || textLower.includes("office") || textLower.includes("dress") || textLower.includes("wedding")) {
+      if (textLower.includes("formal") || textLower.includes("office") || textLower.includes("dress") || textLower.includes("wedding") || textLower.includes("oxford") || textLower.includes("brogue")) {
         updates.purpose = "FORMAL";
       } else if (textLower.includes("running") || textLower.includes("jogging")) {
         updates.purpose = "RUNNING";
-      } else if (textLower.includes("sport") || textLower.includes("gym") || textLower.includes("training") || textLower.includes("athletic") || textLower.includes("sporty")) {
+      } else if (textLower.includes("sport") || textLower.includes("gym") || textLower.includes("training") || textLower.includes("athletic") || textLower.includes("sporty") || textLower.includes("football") || textLower.includes("tennis")) {
         updates.purpose = "SPORTS";
       } else if (textLower.includes("everyday") || textLower.includes("daily") || textLower.includes("lifestyle")) {
         updates.purpose = "EVERYDAY";
-      } else if (textLower.includes("casual")) {
+      } else if (textLower.includes("casual") || textLower.includes("loafer") || textLower.includes("flat") || textLower.includes("sandal") || textLower.includes("boot") || textLower.includes("heel")) {
         updates.purpose = "CASUAL";
       }
     }
@@ -2379,7 +2550,10 @@ export class ShoppingAssistantService {
     }
 
     // 5. Brand Normalization (with Typo Resilience)
-    const knownBrands = ["Nike", "Adidas", "Puma", "ASICS", "New Balance", "Reebok", "Skechers"];
+    const knownBrands = [
+      "Nike", "Adidas", "Puma", "ASICS", "New Balance", "Reebok", "Skechers",
+      "Clarks", "Aldo", "Timberland", "Bata", "Hush Puppies", "Steve Madden", "Vans", "Converse"
+    ];
     const brandAliases: Record<string, string> = {
       "nik": "Nike",
       "nike": "Nike",
@@ -2395,6 +2569,23 @@ export class ShoppingAssistantService {
       "nb": "New Balance",
       "skechers": "Skechers",
       "sketchers": "Skechers",
+      "clark": "Clarks",
+      "clarks": "Clarks",
+      "aldo": "Aldo",
+      "timberland": "Timberland",
+      "timberlands": "Timberland",
+      "timbs": "Timberland",
+      "bata": "Bata",
+      "hush puppies": "Hush Puppies",
+      "hushpuppies": "Hush Puppies",
+      "hush puppy": "Hush Puppies",
+      "steve madden": "Steve Madden",
+      "stevemadden": "Steve Madden",
+      "madden": "Steve Madden",
+      "van": "Vans",
+      "vans": "Vans",
+      "converse": "Converse",
+      "chucks": "Converse",
     };
 
     for (const [alias, canonical] of Object.entries(brandAliases)) {
@@ -2439,9 +2630,31 @@ export class ShoppingAssistantService {
     // 6. Style & Comfort Extraction
     if (parsed.style) updates.style = parsed.style;
     if (parsed.comfort) updates.comfort = parsed.comfort;
-    if (!updates.style && (textLower.includes("office and casual") || textLower.includes("office but") || textLower.includes("versatile"))) {
-      updates.style = "versatile office & casual";
+
+    if (!updates.style) {
+      if (textLower.includes("loafer") || textLower.includes("moccasin")) {
+        updates.style = "loafers";
+      } else if (textLower.includes("heel") || textLower.includes("pump") || textLower.includes("stiletto") || textLower.includes("wedge")) {
+        updates.style = "heels";
+      } else if (textLower.includes("boot") || textLower.includes("chelsea") || textLower.includes("chukka")) {
+        updates.style = "boots";
+      } else if (textLower.includes("flat") || textLower.includes("ballet") || textLower.includes("mule")) {
+        updates.style = "flats";
+      } else if (textLower.includes("sandal") || textLower.includes("slide")) {
+        updates.style = "sandals";
+      } else if (textLower.includes("football") || textLower.includes("cleat") || textLower.includes("soccer") || textLower.includes("futsal")) {
+        updates.style = "football";
+      } else if (textLower.includes("tennis")) {
+        updates.style = "tennis";
+      } else if (textLower.includes("gym") || textLower.includes("cross-train") || textLower.includes("training") || textLower.includes("workout")) {
+        updates.style = "training";
+      } else if (textLower.includes("oxford") || textLower.includes("brogue") || textLower.includes("derby") || textLower.includes("monk strap")) {
+        updates.style = "oxfords";
+      } else if (textLower.includes("office and casual") || textLower.includes("office but") || textLower.includes("versatile")) {
+        updates.style = "versatile office & casual";
+      }
     }
+
     if (!updates.comfort && (textLower.includes("10 km") || textLower.includes("walking") || textLower.includes("comfort"))) {
       updates.comfort = "high-mileage walking comfort";
     }
