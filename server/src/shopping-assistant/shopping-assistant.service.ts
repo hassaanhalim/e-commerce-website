@@ -279,9 +279,19 @@ export class ShoppingAssistantService {
             summaryIntro = "Here are some great casual and everyday alternatives available in stock:";
           }
 
+          // Prioritize AI-generated natural reply if provided by Groq
+          const naturalReply = extractedUpdates.language?.naturalReply?.trim();
+          const introMessage =
+            naturalReply &&
+            naturalReply.length >= 10 &&
+            !naturalReply.toLowerCase().includes("couldn't find") &&
+            !naturalReply.toLowerCase().includes("don't have")
+              ? naturalReply
+              : summaryIntro;
+
           finalResponse = {
             conversationId,
-            message: summaryIntro,
+            message: introMessage,
             preferences: policyResult.mergedPreferences,
             pendingQuestion: null,
             readyForRecommendations: true,
@@ -305,17 +315,25 @@ export class ShoppingAssistantService {
               policyResult.mergedPreferences.age <= 12) ||
             (requestedSizeNum !== null && requestedSizeNum < 36);
 
-          const isStylingAdviceQuery =
-            userMessage.toLowerCase().includes("what shoes should") ||
-            userMessage.toLowerCase().includes("what should i wear") ||
+          const isAdviceOrRecommendationQuery =
+            userMessage.toLowerCase().includes("what shoes") ||
+            userMessage.toLowerCase().includes("what should") ||
             userMessage.toLowerCase().includes("which shoes") ||
             userMessage.toLowerCase().includes("can i wear") ||
             userMessage.toLowerCase().includes("how should") ||
+            userMessage.toLowerCase().includes("recommend") ||
+            userMessage.toLowerCase().includes("suggest") ||
+            userMessage.toLowerCase().includes("best") ||
+            userMessage.toLowerCase().includes("advice") ||
             userMessage.toLowerCase().includes("beach") ||
             userMessage.toLowerCase().includes("dinner") ||
-            userMessage.toLowerCase().includes("party");
+            userMessage.toLowerCase().includes("party") ||
+            userMessage.toLowerCase().includes("event") ||
+            userMessage.toLowerCase().includes("daily") ||
+            userMessage.toLowerCase().includes("walk") ||
+            userMessage.toLowerCase().includes("run");
 
-          if (isStylingAdviceQuery && extractedUpdates.language?.naturalReply) {
+          if (isAdviceOrRecommendationQuery && extractedUpdates.language?.naturalReply && this.validateNaturalResponse(extractedUpdates.language.naturalReply, null, policyResult.mergedPreferences)) {
             finalResponse = {
               conversationId,
               message: extractedUpdates.language.naturalReply,
@@ -518,10 +536,10 @@ export class ShoppingAssistantService {
     const candidateModels = Array.from(
       new Set([
         this.modelName,
-        "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "qwen/qwen3.8-27b",
         "qwen/qwen3.6-27b",
+        "openai/gpt-oss-120b",
       ]),
     ).filter(Boolean);
 
@@ -531,19 +549,33 @@ export class ShoppingAssistantService {
         const responsePromise = this.groq.chat.completions.create({
           model,
           messages,
-          temperature: 0.3,
+          temperature: 0.4,
           response_format: { type: "json_object" },
         });
 
+        // Generous 12s timeout per candidate to allow thoughtful AI reasoning while failing over quickly if stuck
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`LLM request to ${model} timed out after 8s`)), 8000),
+          setTimeout(() => reject(new Error(`LLM request to ${model} timed out after 12s`)), 12000),
         );
 
         const completion = await Promise.race([responsePromise, timeoutPromise]);
         const rawText = completion.choices[0]?.message?.content;
         if (!rawText) continue;
 
-        const parsed = JSON.parse(rawText);
+        let cleaned = rawText.trim();
+        // Strip reasoning tags (<think>...</think>) from reasoning models
+        cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        // Strip markdown code fences if wrapped
+        if (cleaned.startsWith("```")) {
+          cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+        }
+        // Extract outermost JSON object if extra text surrounds it
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          cleaned = jsonMatch[0];
+        }
+
+        const parsed = JSON.parse(cleaned);
         const latencyMs = Date.now() - start;
         return { parsed, latencyMs, modelUsed: model };
       } catch (err: any) {
@@ -819,7 +851,8 @@ export class ShoppingAssistantService {
       /^(?:as[- ]?salam(?:u|o)?\s*(?:alaikum|alaykum|alekum)?|assalam\s*o\s*alaikum|salam|slam|aaoa)$/i.test(textLower) ||
       textLower.startsWith("assalam") ||
       textLower.startsWith("as-salam") ||
-      ["hi", "hello", "hey", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower)
+      /^(?:hi+|he+y+|hello+|hola|yo|sup|hry|how are you|how r u|whats up|what's up|good\s*(?:morning|afternoon|evening)|greetings|hi\s*there|hello\s*there)$/i.test(textLower) ||
+      ["hi", "hii", "hiii", "hello", "hey", "heyy", "hry", "yo", "sup", "how are you", "how r u", "whats up", "what's up", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower)
     ) {
       if (!state.purpose && !state.size && !state.brand && !extracted?.purpose && !extracted?.brand) {
         return "GREETING";
@@ -868,8 +901,11 @@ export class ShoppingAssistantService {
       return "PRODUCT_COMPARISON";
     }
 
-    // 6. Casual Conversation
-    if (["thanks", "thank you", "nice", "cool", "great", "ok thanks", "awesome"].includes(textLower)) {
+    // 6. Casual Conversation & Acknowledgments
+    if (
+      /^(?:thanks?|thank\s*you|nice|cool|great|awesome|k|ok|okay|kk|alright|got it|sounds good|fine|sure|no problem|ok thanks|okay thanks)$/i.test(textLower) ||
+      ["thanks", "thank you", "nice", "cool", "great", "ok thanks", "awesome", "k", "ok", "okay", "kk", "alright", "got it", "sounds good", "fine", "no problem"].includes(textLower)
+    ) {
       return "CASUAL_CONVERSATION";
     }
 
@@ -1198,9 +1234,10 @@ export class ShoppingAssistantService {
       };
     }
 
-    // 0c. General standalone greetings ("hi", "hello", "hey")
+    // 0c. General standalone greetings ("hi", "hello", "hey", "hii", "hry")
     const isGeneralGreeting =
-      ["hi", "hello", "hey", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower) &&
+      (/^(?:hi+|he+y+|hello+|hola|yo|sup|hry|how are you|how r u|whats up|what's up|good\s*(?:morning|afternoon|evening)|greetings|hi\s*there|hello\s*there)$/i.test(textLower) ||
+      ["hi", "hii", "hiii", "hello", "hey", "heyy", "hry", "yo", "sup", "how are you", "how r u", "whats up", "what's up", "good morning", "good evening", "greetings", "hi there", "hello there"].includes(textLower)) &&
       !state.size &&
       !state.purpose &&
       !state.brand &&
@@ -1212,6 +1249,7 @@ export class ShoppingAssistantService {
         nextAction: "ASK_WEARER",
         nextQuestion: { field: "WEARER", type: "CHOICE", options: ["For me", "For someone else"] },
         replyMessage:
+          updates?.language?.naturalReply ||
           "Hello! I can help you find the right shoes. Are you shopping for yourself or someone else?",
         canSearchCatalog: false,
       };
@@ -1271,7 +1309,21 @@ export class ShoppingAssistantService {
       };
     }
 
-    // 0g. Casual Conversation
+    // 0g. Casual Conversation & Acknowledgments
+    const isAcknowledgement =
+      /^(?:k|ok|okay|kk|alright|got it|sounds good|fine|sure|no problem)$/i.test(textLower);
+
+    if (isAcknowledgement && !state.purpose && !state.brand && !state.style) {
+      return {
+        nextAction: "CASUAL_REPLY",
+        nextQuestion: null,
+        replyMessage:
+          updates?.language?.naturalReply ||
+          "What kind of shoes are you looking for today — casual, running, or formal?",
+        canSearchCatalog: false,
+      };
+    }
+
     if (
       state.intent === "CASUAL_CONVERSATION" ||
       ["thanks", "thank you", "nice", "cool", "great", "ok thanks", "awesome"].includes(textLower)
@@ -1279,7 +1331,9 @@ export class ShoppingAssistantService {
       return {
         nextAction: "CASUAL_REPLY",
         nextQuestion: null,
-        replyMessage: "You're very welcome! Let me know if you need any help finding shoes or checking styles.",
+        replyMessage:
+          updates?.language?.naturalReply ||
+          "You're very welcome! Let me know if you need any help finding shoes or checking styles.",
         canSearchCatalog: false,
       };
     }
@@ -1418,18 +1472,33 @@ export class ShoppingAssistantService {
       }
     }
 
-    // 6. Proactive suggestion requests
-    if (
-      updates?.isProactiveSuggestionRequest ||
+    // 6. Proactive suggestion requests (only when specific criteria exists OR explicit browse command)
+    const hasSpecificProductCriteria = Boolean(
+      state.purpose ||
+      state.brand ||
+      state.style ||
+      updates?.purpose ||
+      updates?.brand ||
+      updates?.style
+    );
+
+    const isThirdPartyWearer =
+      updates?.wearerType === "OTHER" ||
+      (updates?.wearerRelation && updates?.wearerRelation !== "myself") ||
+      state.wearer?.type === "OTHER";
+
+    const isExplicitBrowseRequest =
       textLower.includes("suggest me") ||
       textLower.includes("suggest something") ||
-      textLower.includes("yes suggest") ||
       textLower.includes("what do you have") ||
       textLower.includes("show me popular") ||
       textLower.includes("show all") ||
-      (pendingQuestion?.field === "SIZE" &&
-        ["yes", "sure", "ok", "suggest", "show me"].includes(textLower))
-    ) {
+      textLower.includes("show me shoes") ||
+      textLower.includes("browse shoes") ||
+      ((textLower.includes("i need") || textLower.includes("looking for") || textLower.includes("want") || textLower.startsWith("show me ")) && hasSpecificProductCriteria) ||
+      (pendingQuestion?.field === "SIZE" && ["suggest", "show me", "browse"].includes(textLower));
+
+    if (!isThirdPartyWearer && (isExplicitBrowseRequest || (updates?.isProactiveSuggestionRequest && hasSpecificProductCriteria))) {
       return {
         nextAction: "SEARCH_PRODUCTS",
         nextQuestion: null,
@@ -1481,9 +1550,11 @@ export class ShoppingAssistantService {
       currIntent === "GENERAL_SHOE_HELP" ||
       currIntent === "PRODUCT_QUESTION" ||
       currIntent === "CASUAL_CONVERSATION" ||
+      currIntent === "GREETING" ||
       updIntent === "GENERAL_SHOE_HELP" ||
       updIntent === "PRODUCT_QUESTION" ||
-      updIntent === "CASUAL_CONVERSATION"
+      updIntent === "CASUAL_CONVERSATION" ||
+      updIntent === "GREETING"
     ) {
       return {
         nextAction: "CASUAL_REPLY",
@@ -1495,9 +1566,7 @@ export class ShoppingAssistantService {
       };
     }
 
-
     // 10. Size is missing -> ASK_SIZE (Wearer-aware phrasing)
-
     if (state.size === null || state.size === undefined) {
       let sizePrompt = "What shoe size should I look for?";
       if (wearer?.relation === "daughter") {
@@ -1779,7 +1848,12 @@ export class ShoppingAssistantService {
         pName.includes("brogue") ||
         pName.includes("derby") ||
         pName.includes("loafer") ||
-        pName.includes("monk");
+        pName.includes("monk") ||
+        pName.includes("heel") ||
+        pName.includes("pump") ||
+        pName.includes("stiletto") ||
+        pName.includes("wedge") ||
+        pName.includes("court shoe");
       if (!isTrueFormal) {
         return { valid: false, reason: "Product is not a formal shoe" };
       }

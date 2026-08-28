@@ -42,7 +42,7 @@ async function callChat(message) {
           "Origin": "http://localhost:5173",
           "Content-Length": Buffer.byteLength(payload),
         },
-        timeout: 20000,
+        timeout: 35000,
       },
       (res) => {
         let data = "";
