@@ -4,6 +4,39 @@ import { adminApi, type BackendCustomerItem } from "../../services/admin-api";
 import { formatPrice } from "../../utils/formatPrice";
 import AdminTable, { type Column } from "../../components/admin/AdminTable";
 
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay === 1) return "Yesterday";
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return date.toLocaleDateString("en-PK", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function getActivityLabel(type?: string): { title: string; icon: string; dotColor: string } {
+  switch (type) {
+    case "CHAT_MESSAGE":
+      return { title: "Chat message", icon: "💬", dotColor: "bg-blue-500" };
+    case "ORDER_PLACED":
+      return { title: "Order placed", icon: "🛍️", dotColor: "bg-emerald-500" };
+    case "REVIEW_SUBMITTED":
+      return { title: "Review submitted", icon: "⭐", dotColor: "bg-amber-500" };
+    case "RETURN_REQUESTED":
+      return { title: "Return requested", icon: "🔄", dotColor: "bg-purple-500" };
+    case "ACCOUNT_CREATED":
+    default:
+      return { title: "Account created", icon: "👤", dotColor: "bg-gray-400" };
+  }
+}
+
 export function CustomerListPage() {
   const [customers, setCustomers] = useState<BackendCustomerItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +98,23 @@ export function CustomerListPage() {
       sortable: true,
     },
     {
+      header: "Last Activity",
+      accessor: (row) => {
+        const activity = getActivityLabel(row.lastActivityType);
+        const timeAgo = row.lastActivityAt ? formatRelativeTime(row.lastActivityAt) : "—";
+        return (
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${activity.dotColor}`} />
+              <span className="font-semibold text-gray-900 text-xs">{activity.title}</span>
+            </div>
+            <p className="text-[11px] text-gray-400 font-medium pl-3">· {timeAgo}</p>
+          </div>
+        );
+      },
+      sortable: true,
+    },
+    {
       header: "Phone Number",
       accessor: (row) => row.phone || "—",
     },
@@ -92,6 +142,7 @@ export function CustomerListPage() {
       sortable: true,
     },
   ];
+
 
   return (
     <div className="space-y-6">

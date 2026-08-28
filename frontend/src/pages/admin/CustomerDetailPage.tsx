@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router";
-import { adminApi, type BackendCustomerDetail } from "../../services/admin-api";
+import {
+  adminApi,
+  type BackendCustomerDetail,
+  type CustomerConversationSummary,
+  type CustomerConversationDetail,
+} from "../../services/admin-api";
 import { formatPrice } from "../../utils/formatPrice";
 
 export function CustomerDetailPage() {
@@ -10,6 +15,16 @@ export function CustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionMessage, setActionMessage] = useState("");
+  const [activeTab, setActiveTab] = useState<"activity" | "chat">("activity");
+
+  // Chat conversations state
+  const [conversations, setConversations] = useState<CustomerConversationSummary[]>([]);
+  const [totalConversations, setTotalConversations] = useState(0);
+  const [latestConversationAt, setLatestConversationAt] = useState<string | null>(null);
+  const [loadingConversations, setLoadingConversations] = useState(false);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedConversation, setSelectedConversation] = useState<CustomerConversationDetail | null>(null);
+  const [loadingThread, setLoadingThread] = useState(false);
 
   const fetchCustomer = () => {
     if (!customerId) return;
@@ -26,8 +41,37 @@ export function CustomerDetailPage() {
       .finally(() => setLoading(false));
   };
 
+  const fetchConversations = () => {
+    if (!customerId) return;
+    setLoadingConversations(true);
+    adminApi
+      .getCustomerConversations(customerId)
+      .then((res) => {
+        setConversations(res.conversations);
+        setTotalConversations(res.totalConversations);
+        setLatestConversationAt(res.latestConversationAt);
+        if (res.conversations.length > 0 && !selectedConversationId) {
+          loadConversationThread(res.conversations[0].id);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingConversations(false));
+  };
+
+  const loadConversationThread = (convId: string) => {
+    if (!customerId) return;
+    setSelectedConversationId(convId);
+    setLoadingThread(true);
+    adminApi
+      .getCustomerConversationById(customerId, convId)
+      .then((data) => setSelectedConversation(data))
+      .catch(() => setSelectedConversation(null))
+      .finally(() => setLoadingThread(false));
+  };
+
   useEffect(() => {
     fetchCustomer();
+    fetchConversations();
   }, [customerId]);
 
   const handleToggleStatus = async () => {
@@ -67,7 +111,7 @@ export function CustomerDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8">
+    <div className="mx-auto max-w-5xl space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4">
         <div className="flex items-center gap-3">
@@ -113,6 +157,35 @@ export function CustomerDetailPage() {
         </div>
       )}
 
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-gray-200 gap-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab("activity")}
+          className={`pb-3 text-xs font-bold transition cursor-pointer border-b-2 ${
+            activeTab === "activity"
+              ? "border-black text-gray-950"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          Orders & Activity ({customer.orderCount})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("chat")}
+          className={`pb-3 text-xs font-bold transition cursor-pointer border-b-2 flex items-center gap-1.5 ${
+            activeTab === "chat"
+              ? "border-black text-gray-950"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          <span>Chat Conversations</span>
+          <span className="rounded-full bg-gray-150 px-2 py-0.2 text-[10px] font-bold text-gray-700">
+            {totalConversations}
+          </span>
+        </button>
+      </div>
+
       {/* Main Grid */}
       <div className="grid gap-6 md:grid-cols-3">
         {/* Left Column: Personal Info & Saved Addresses */}
@@ -130,6 +203,10 @@ export function CustomerDetailPage() {
             <div className="border-t border-gray-100 pt-3 flex justify-between">
               <span className="text-gray-500">Total Orders</span>
               <span className="font-bold text-gray-900">{customer.orderCount}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Chat Conversations</span>
+              <span className="font-bold text-gray-900">{totalConversations}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-500">Total Spent</span>
@@ -157,84 +234,289 @@ export function CustomerDetailPage() {
           </div>
         </div>
 
-        {/* Right Column: Order History, Reviews, Returns */}
+        {/* Right Column: Dynamic Tab Content */}
         <div className="md:col-span-2 space-y-6">
-          {/* Recent Orders */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Orders</h3>
-            {customer.orders.length === 0 ? (
-              <p className="text-xs text-gray-400 font-medium italic">No order history available for this customer.</p>
-            ) : (
-              <div className="divide-y divide-gray-150">
-                {customer.orders.map((ord) => (
-                  <div key={ord.id} className="py-3 flex items-center justify-between text-xs">
-                    <div>
-                      <Link to={`/admin/orders/${ord.id}`} className="font-mono font-bold text-gray-950 hover:underline">
-                        {ord.orderNumber}
-                      </Link>
-                      <p className="text-[11px] text-gray-400">{new Date(ord.createdAt).toLocaleDateString("en-PK")}</p>
-                    </div>
+          {activeTab === "activity" ? (
+            <>
+              {/* Recent Orders */}
+              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Orders</h3>
+                {customer.orders.length === 0 ? (
+                  <p className="text-xs text-gray-400 font-medium italic">No order history available for this customer.</p>
+                ) : (
+                  <div className="divide-y divide-gray-150">
+                    {customer.orders.map((ord) => (
+                      <div key={ord.id} className="py-3 flex items-center justify-between text-xs">
+                        <div>
+                          <Link to={`/admin/orders/${ord.id}`} className="font-mono font-bold text-gray-950 hover:underline">
+                            {ord.orderNumber}
+                          </Link>
+                          <p className="text-[11px] text-gray-400">{new Date(ord.createdAt).toLocaleDateString("en-PK")}</p>
+                        </div>
 
-                    <div className="flex items-center gap-3">
-                      <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-700 uppercase">
-                        {ord.status}
-                      </span>
-                      <span className="font-extrabold text-gray-950">{formatPrice(Number(ord.total))}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-700 uppercase">
+                            {ord.status}
+                          </span>
+                          <span className="font-extrabold text-gray-950">{formatPrice(Number(ord.total))}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Customer Reviews */}
+              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Product Reviews Submitted</h3>
+                {customer.reviews.length === 0 ? (
+                  <p className="text-xs text-gray-400 font-medium italic">No reviews submitted.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {customer.reviews.map((rev) => (
+                      <div key={rev.id} className="rounded-xl border border-gray-150 bg-gray-50 p-3.5 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-gray-900">{rev.product?.name || "Product"}</span>
+                          <span className="font-bold text-amber-500">{"★".repeat(rev.rating)} ({rev.status})</span>
+                        </div>
+                        {rev.title && <p className="font-semibold text-gray-800">{rev.title}</p>}
+                        <p className="text-gray-600 leading-relaxed">{rev.comment}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Return & Exchange Requests */}
+              <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Return & Exchange Requests</h3>
+                {customer.returnRequests.length === 0 ? (
+                  <p className="text-xs text-gray-400 font-medium italic">No return or exchange requests.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {customer.returnRequests.map((ret) => (
+                      <div key={ret.id} className="rounded-xl border border-gray-150 bg-gray-50 p-3.5 text-xs flex items-center justify-between">
+                        <div>
+                          <span className="font-mono font-bold text-gray-950">{ret.requestNumber}</span>
+                          <p className="text-gray-500 text-[11px]">Type: {ret.type} · Reason: {ret.reason}</p>
+                        </div>
+
+                        <div className="text-right">
+                          <span className="rounded bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-800 uppercase">
+                            {ret.status}
+                          </span>
+                          {Number(ret.refundAmount) > 0 && (
+                            <p className="font-bold text-emerald-700 text-xs mt-1">{formatPrice(Number(ret.refundAmount))}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Chat Conversations Tab */
+            <div className="space-y-6">
+              {/* Summary Stats Card */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+                  <p className="text-gray-400 font-bold uppercase text-[10px]">Total Conversations</p>
+                  <p className="text-2xl font-extrabold text-gray-950 mt-1">{totalConversations}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Persisted Shopping Assistant sessions</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs">
+                  <p className="text-gray-400 font-bold uppercase text-[10px]">Latest Chat Activity</p>
+                  <p className="text-sm font-bold text-gray-950 mt-2">
+                    {latestConversationAt
+                      ? new Date(latestConversationAt).toLocaleDateString("en-PK", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "No activity"}
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">Most recent user or assistant message</p>
+                </div>
+              </div>
+
+              {loadingConversations ? (
+                <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center">
+                  <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-black border-t-transparent" />
+                  <p className="mt-2 text-xs font-semibold text-gray-400">Loading chat history...</p>
+                </div>
+              ) : conversations.length === 0 ? (
+                <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center space-y-2">
+                  <div className="text-3xl">💬</div>
+                  <p className="text-sm font-bold text-gray-900">No Shopping Assistant conversations yet.</p>
+                  <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                    When this customer interacts with the AI Shopping Assistant, their conversation sessions and recommended product references will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-6 lg:grid-cols-12">
+                  {/* Conversation List (Left side: 5 cols) */}
+                  <div className="lg:col-span-5 space-y-2.5">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider px-1">
+                      Conversation Sessions ({conversations.length})
+                    </h3>
+                    <div className="space-y-2 max-h-[580px] overflow-y-auto pr-1">
+                      {conversations.map((conv, idx) => {
+                        const isSelected = selectedConversationId === conv.id;
+                        return (
+                          <div
+                            key={conv.id}
+                            onClick={() => loadConversationThread(conv.id)}
+                            className={`p-3.5 rounded-xl border transition cursor-pointer text-xs space-y-1.5 ${
+                              isSelected
+                                ? "border-black bg-gray-50 shadow-xs"
+                                : "border-gray-200 bg-white hover:border-gray-300"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                                <span className="text-gray-400 font-mono text-[11px]">#{idx + 1}</span>
+                                <span>
+                                  {new Date(conv.createdAt).toLocaleDateString("en-PK", {
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })}
+                                </span>
+                              </span>
+                              <span className="rounded-md bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-700">
+                                {conv.messageCount} msgs
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-gray-400">
+                              Last active: {new Date(conv.lastMessageAt).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                            {conv.lastMessageSnippet && (
+                              <p className="text-gray-600 line-clamp-2 italic text-[11px]">
+                                "{conv.lastMessageSnippet}"
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* Customer Reviews */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Product Reviews Submitted</h3>
-            {customer.reviews.length === 0 ? (
-              <p className="text-xs text-gray-400 font-medium italic">No reviews submitted.</p>
-            ) : (
-              <div className="space-y-3">
-                {customer.reviews.map((rev) => (
-                  <div key={rev.id} className="rounded-xl border border-gray-150 bg-gray-50 p-3.5 text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-gray-900">{rev.product?.name || "Product"}</span>
-                      <span className="font-bold text-amber-500">{"★".repeat(rev.rating)} ({rev.status})</span>
-                    </div>
-                    {rev.title && <p className="font-semibold text-gray-800">{rev.title}</p>}
-                    <p className="text-gray-600 leading-relaxed">{rev.comment}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  {/* Conversation Thread Viewer (Right side: 7 cols) */}
+                  <div className="lg:col-span-7">
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs space-y-4 min-h-[400px]">
+                      {loadingThread ? (
+                        <div className="py-20 text-center">
+                          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-black border-t-transparent" />
+                          <p className="mt-2 text-xs font-semibold text-gray-400">Loading conversation thread...</p>
+                        </div>
+                      ) : !selectedConversation ? (
+                        <div className="py-20 text-center text-xs text-gray-400 font-medium">
+                          Select a conversation to view the full message thread.
+                        </div>
+                      ) : (
+                        <>
+                          {/* Thread Header */}
+                          <div className="border-b border-gray-150 pb-3 flex items-center justify-between text-xs">
+                            <div>
+                              <p className="font-bold text-gray-900">
+                                Conversation Thread
+                              </p>
+                              <p className="text-[11px] text-gray-400">
+                                Started {new Date(selectedConversation.createdAt).toLocaleString("en-PK")}
+                              </p>
+                            </div>
+                            <span className="font-mono text-[10px] text-gray-400">
+                              ID: {selectedConversation.id.slice(0, 8)}...
+                            </span>
+                          </div>
 
-          {/* Return & Exchange Requests */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Return & Exchange Requests</h3>
-            {customer.returnRequests.length === 0 ? (
-              <p className="text-xs text-gray-400 font-medium italic">No return or exchange requests.</p>
-            ) : (
-              <div className="space-y-3">
-                {customer.returnRequests.map((ret) => (
-                  <div key={ret.id} className="rounded-xl border border-gray-150 bg-gray-50 p-3.5 text-xs flex items-center justify-between">
-                    <div>
-                      <span className="font-mono font-bold text-gray-950">{ret.requestNumber}</span>
-                      <p className="text-gray-500 text-[11px]">Type: {ret.type} · Reason: {ret.reason}</p>
-                    </div>
+                          {/* Message Bubbles (Chronological) */}
+                          <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                            {selectedConversation.messages.map((msg) => {
+                              const isUser = msg.role === "user";
+                              return (
+                                <div
+                                  key={msg.id}
+                                  className={`flex flex-col ${isUser ? "items-end" : "items-start"} space-y-1.5`}
+                                >
+                                  <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-semibold px-1">
+                                    <span>{isUser ? customer.fullName : "🤖 Shopping Assistant"}</span>
+                                    <span>·</span>
+                                    <span>{new Date(msg.createdAt).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })}</span>
+                                  </div>
 
-                    <div className="text-right">
-                      <span className="rounded bg-gray-200 px-2 py-0.5 text-[10px] font-bold text-gray-800 uppercase">
-                        {ret.status}
-                      </span>
-                      {Number(ret.refundAmount) > 0 && (
-                        <p className="font-bold text-emerald-700 text-xs mt-1">{formatPrice(Number(ret.refundAmount))}</p>
+                                  <div
+                                    className={`rounded-2xl px-4 py-3 text-xs leading-relaxed max-w-[90%] ${
+                                      isUser
+                                        ? "bg-black text-white font-medium rounded-tr-xs"
+                                        : "bg-gray-100 text-gray-900 border border-gray-200 rounded-tl-xs"
+                                    }`}
+                                  >
+                                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                                  </div>
+
+                                  {/* Product Recommendation References */}
+                                  {!isUser && msg.products && msg.products.length > 0 && (
+                                    <div className="w-full max-w-[95%] space-y-2 pt-1">
+                                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                        Recommended Products ({msg.products.length})
+                                      </p>
+                                      <div className="grid gap-2 sm:grid-cols-2">
+                                        {msg.products.map((prod) => (
+                                          <div
+                                            key={prod.id}
+                                            className="rounded-xl border border-gray-200 bg-white p-2.5 flex items-center gap-2.5 shadow-2xs hover:border-black transition"
+                                          >
+                                            {prod.image ? (
+                                              <img
+                                                src={prod.image}
+                                                alt={prod.name}
+                                                className="h-12 w-12 rounded-lg object-cover bg-gray-50 flex-shrink-0"
+                                              />
+                                            ) : (
+                                              <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
+                                                👟
+                                              </div>
+                                            )}
+
+                                            <div className="min-w-0 flex-1 text-[11px]">
+                                              <p className="font-bold text-gray-900 truncate">{prod.name}</p>
+                                              <p className="text-[10px] text-gray-500 truncate">{prod.brand} · {prod.category}</p>
+                                              <div className="flex items-center justify-between mt-1">
+                                                <span className="font-extrabold text-emerald-700 text-xs">
+                                                  {formatPrice(prod.displayPrice)}
+                                                </span>
+                                                <span
+                                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                                                    prod.inStock
+                                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                      : "bg-red-50 text-red-700 border border-red-200"
+                                                  }`}
+                                                >
+                                                  {prod.inStock ? "In Stock" : "Out of Stock"}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

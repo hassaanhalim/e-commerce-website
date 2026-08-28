@@ -53,8 +53,8 @@ export interface ExtractedDeltaUpdates {
   language?: NaturalLanguagePayload | null;
 }
 
-const EXTRACTION_SYSTEM_INSTRUCTION = `You are a production-grade conversational AI Shopping Agent for an online footwear store.
-Your job is to understand human conversation, answer store questions, track orders, assist with style choices, handle product comparisons, and extract shopping preferences.
+const EXTRACTION_SYSTEM_INSTRUCTION = `You are an expert, friendly, and conversational AI Shopping Assistant for an online footwear store.
+Your goal is to have natural, helpful conversations with customers: answer shoe advice questions, recommend footwear styles, explain shoe features, assist with store policies, and understand shopping preferences.
 
 Guidelines:
 1. intent: "GREETING" | "PRODUCT_DISCOVERY" | "PRODUCT_RECOMMENDATION" | "PRODUCT_COMPARISON" | "PRODUCT_QUESTION" | "STORE_INFORMATION" | "ORDER_SUPPORT" | "CASUAL_CONVERSATION" | "PRODUCT_REFINEMENT" | "NEW_SHOPPING_CONTEXT" | "GENERAL_SHOE_HELP" | "OFF_TOPIC"
@@ -69,7 +69,7 @@ Guidelines:
 10. brand: brand name (e.g. "Nike", "Adidas", "Puma", "ASICS", "New Balance", "Reebok", "Skechers") | null
 11. color: color string | null
 12. style: style description (e.g. "office and casual", "versatile sneakers", "leather formal", "slip-on") | null
-13. comfort: comfort requirements (e.g. "10 km daily walking", "cushioned arch support", "breathable") | null
+13. comfort: comfort requirements (e.g. "10 km daily walking", "cushioned arch support", "breathable", "flat feet") | null
 14. comparedProducts: array of product model names to compare (e.g. ["Nike Pegasus", "Adidas Ultraboost"]) | null
 15. orderNumber: extracted order tracking number or ID (e.g. "ORD-12345") | null
 16. storeInfoTopic: "SHIPPING" | "RETURNS" | "PAYMENT" | "WARRANTY" | "SIZING" | "GENERAL" | null
@@ -77,17 +77,21 @@ Guidelines:
 18. isAffirmativeRelaxation: true if customer agreed to relax constraints (e.g. "yes", "sure", "show casual")
 19. isNewWearerContext: true if shopping for someone new (e.g. "for my daughter", "for my sister")
 20. isCorrection: true if correcting previous input ("I said 38 not 3838", "actually 39")
-21. isProactiveSuggestionRequest: true if asking for suggestions ("suggest me", "what do you have")
+21. isProactiveSuggestionRequest: true if asking for suggestions ("suggest me", "what do you have", "show me")
 22. language:
     - acknowledgement: short acknowledgement of newly shared context or greeting
-    - question: natural phrasing of the single next logical question (if shopping), or empty if answering store info
-    - naturalReply: complete 1-2 sentence response. For Islamic greetings, reply "Wa Alaikum Assalam! ...". For general greetings, welcome warmly. For store info, summarize policy. For complex style requests, guide intelligently without demanding size first.
+    - question: gentle next question if needed, or empty
+    - naturalReply: helpful, friendly 1-3 sentence response.
+      * For questions/advice (e.g., gym shoes, walking, flat feet, shoe types), provide knowledgeable footwear guidance first before asking any gentle question.
+      * Do NOT aggressively ask for shoe size on the very first turn if the user is just asking advice or exploring.
+      * For Islamic greetings, reply "Wa Alaikum Assalam! ...".
+      * For general greetings, welcome warmly.
+      * For store info, summarize policy accurately.
 
 CRITICAL RULES:
-- NEVER invent product names, specific shoe models, prices, discounts, or stock numbers.
-- For Islamic greetings ("assalamualaikum"), respond with "Wa Alaikum Assalam! ...".
-- Keep responses concise (1-2 sentences), friendly, helpful, and conversational.
-- Use natural pronouns based on wearer relation (sister -> she/her/your sister, brother -> he/him/your brother).`;
+- Do NOT invent fake product discounts or fake prices (e.g. "only $20", "50% off").
+- Keep responses concise (1-3 sentences), warm, and natural.
+- Use natural pronouns based on wearer relation.`;
 
 @Injectable()
 export class ShoppingAssistantService {
@@ -109,7 +113,7 @@ export class ShoppingAssistantService {
     this.modelName =
       this.configService.get<string>("SHOPPING_ASSISTANT_MODEL") ||
       process.env.SHOPPING_ASSISTANT_MODEL ||
-      "llama-3.3-70b-versatile";
+      "openai/gpt-oss-120b";
 
     if (apiKey) {
       this.groq = new Groq({ apiKey });
@@ -174,18 +178,16 @@ export class ShoppingAssistantService {
     const currentPreferences = this.sanitizePreferences(dto.preferences);
     const currentPendingQuestion = dto.pendingQuestion || null;
 
-    // Step 1: Single Groq Call per turn with Fast Path Optimization (Phase 4 Step 35)
+    // Step 1: Groq Call with model fallback and fast path
     let extractedUpdates: ExtractedDeltaUpdates;
 
     const isSimpleFastPath = this.canUseFastPath(userMessage, currentPendingQuestion, currentPreferences);
 
-    // ── DEBUG INSTRUMENTATION (development only) ──
     const isDev = process.env.NODE_ENV === "development";
     let debugGroqUsed = false;
     let debugGroqLatencyMs = 0;
     let debugRawGroqOutput: any = null;
     let debugResponseSource: "FAST_PATH" | "GROQ_EXTRACTION" | "GROQ_FALLBACK" | "NO_AI_CLIENT" = "FAST_PATH";
-    // ── END DEBUG VARS ──
 
     if (!this.groq || isSimpleFastPath) {
       extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
@@ -218,41 +220,26 @@ export class ShoppingAssistantService {
         if (isDev) {
           this.logger.debug(`[GROQ_CALL_START] message="${userMessage}" | model=${this.modelName} | historyTurns=${messages.length}`);
         }
-        const groqCallStart = Date.now();
 
-        const responsePromise = this.groq.chat.completions.create({
-          model: this.modelName,
-          messages,
-          temperature: 0.2,
-          response_format: { type: "json_object" },
-        });
+        const groqResult = await this.executeGroqCompletion(messages);
 
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("LLM request timed out after 3s")), 3000),
-        );
-
-        const completion = await Promise.race([responsePromise, timeoutPromise]);
-        const rawText = completion.choices[0]?.message?.content;
-
-        debugGroqLatencyMs = Date.now() - groqCallStart;
-        debugGroqUsed = true;
-        debugResponseSource = "GROQ_EXTRACTION";
-
-        if (!rawText) {
-          throw new Error("Empty response from LLM");
+        if (!groqResult) {
+          throw new Error("All Groq models failed or returned empty response");
         }
 
-        const parsed = JSON.parse(rawText);
-        debugRawGroqOutput = parsed;
+        debugGroqLatencyMs = groqResult.latencyMs;
+        debugGroqUsed = true;
+        debugResponseSource = "GROQ_EXTRACTION";
+        debugRawGroqOutput = groqResult.parsed;
 
         if (isDev) {
-          this.logger.debug(`[GROQ_CALL_SUCCESS] latency=${debugGroqLatencyMs}ms | tokens=${completion.usage?.total_tokens ?? 0} | rawOutput=${JSON.stringify(parsed)}`);
-          if (parsed.language?.naturalReply) {
-            this.logger.debug(`[GROQ_LANGUAGE] naturalReply="${parsed.language.naturalReply}"`);
+          this.logger.debug(`[GROQ_CALL_SUCCESS] latency=${debugGroqLatencyMs}ms | model=${groqResult.modelUsed} | rawOutput=${JSON.stringify(groqResult.parsed)}`);
+          if (groqResult.parsed.language?.naturalReply) {
+            this.logger.debug(`[GROQ_LANGUAGE] naturalReply="${groqResult.parsed.language.naturalReply}"`);
           }
         }
 
-        extractedUpdates = this.normalizeExtractedUpdates(parsed, userMessage, currentPendingQuestion, currentPreferences);
+        extractedUpdates = this.normalizeExtractedUpdates(groqResult.parsed, userMessage, currentPendingQuestion, currentPreferences);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Unknown error";
         this.logger.error(`Shopping Assistant LLM extraction error: ${errorMsg}`);
@@ -263,6 +250,7 @@ export class ShoppingAssistantService {
         extractedUpdates = this.extractFallbackUpdates(userMessage, currentPendingQuestion, currentPreferences);
       }
     }
+
 
     // Step 2: Apply Intent Router & Authoritative Conversation State Engine (Phase 1)
     const policyResult = this.applyConversationPolicy(
@@ -501,6 +489,53 @@ export class ShoppingAssistantService {
   }
 
   /**
+   * Robust multi-model Groq completion execution with fallback
+   */
+  private async executeGroqCompletion(
+    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  ): Promise<{ parsed: any; latencyMs: number; modelUsed: string } | null> {
+    if (!this.groq) return null;
+
+    const candidateModels = Array.from(
+      new Set([
+        this.modelName,
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "qwen/qwen3.8-27b",
+        "qwen/qwen3.6-27b",
+      ]),
+    ).filter(Boolean);
+
+    for (const model of candidateModels) {
+      try {
+        const start = Date.now();
+        const responsePromise = this.groq.chat.completions.create({
+          model,
+          messages,
+          temperature: 0.3,
+          response_format: { type: "json_object" },
+        });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`LLM request to ${model} timed out after 8s`)), 8000),
+        );
+
+        const completion = await Promise.race([responsePromise, timeoutPromise]);
+        const rawText = completion.choices[0]?.message?.content;
+        if (!rawText) continue;
+
+        const parsed = JSON.parse(rawText);
+        const latencyMs = Date.now() - start;
+        return { parsed, latencyMs, modelUsed: model };
+      } catch (err: any) {
+        this.logger.warn(`Groq completion attempt on model "${model}" failed: ${err.message}`);
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Fast-Path check (Phase 4 Step 35) for simple unambiguous replies
    */
   private canUseFastPath(
@@ -704,23 +739,24 @@ export class ShoppingAssistantService {
   }
 
   /**
-   * Phase 3: Product-Claim Guard & Action Alignment Validation
+   * Phase 3: Natural Response Guard & Action Alignment Validation
    */
   public validateNaturalResponse(
     text: string,
     action: NextAction | null | undefined,
     state: ShoppingPreferences,
   ): boolean {
-    if (!text || text.length < 5 || text.length > 450) return false;
+    if (!text || text.length < 5 || text.length > 800) return false;
     const textLower = text.toLowerCase();
 
-    // 1. PRODUCT-CLAIM GUARD: Never allow unsupported specific product claims or pricing in conversational text
-    const bannedProductClaims = [
-      "air max", "pegasus", "ultraboost", "zoom fly", "floatride", "novablast", "gel-venture", "smash v2",
-      "rs.", "pkr", "rs ", "dollars", "$", "discount", "percent off", "in stock for rs",
-    ];
-    for (const claim of bannedProductClaims) {
-      if (textLower.includes(claim)) return false;
+    // 1. PRODUCT-CLAIM GUARD: Never allow unsupported specific price/discount claims in conversational text
+    if (
+      /\b(?:rs\.?|pkr|\$)\s*\d+/i.test(text) ||
+      /\bin stock for (?:rs|pkr|\$|\d+)/i.test(text) ||
+      /\b\d+%\s*off\b/i.test(text) ||
+      /\bdiscount of\b/i.test(text)
+    ) {
+      return false;
     }
 
     // 2. OFF-TOPIC GUARD: If the action is off-topic redirect, must mention shoes/footwear
@@ -731,6 +767,7 @@ export class ShoppingAssistantService {
     // 3. Conversational responses that pass the claim guard and are helpful are valid
     return true;
   }
+
 
   /**
    * Intent Router (Phase 1): Classifies incoming message into one of the 5 canonical intents
@@ -863,11 +900,24 @@ export class ShoppingAssistantService {
       return "PRODUCT_RECOMMENDATION";
     }
 
-    // 10. General Shoe Help
+    // 10. General Shoe Help & Advice Q&A
     if (
       textLower.includes("what size") ||
       textLower.includes("size chart") ||
-      textLower.includes("how to measure")
+      textLower.includes("how to measure") ||
+      textLower.includes("what kind") ||
+      textLower.includes("which shoes") ||
+      textLower.includes("difference between") ||
+      textLower.includes("how should") ||
+      textLower.includes("flat feet") ||
+      textLower.includes("gym") ||
+      textLower.includes("workout") ||
+      textLower.includes("standing all day") ||
+      textLower.includes("plantar") ||
+      textLower.includes("tips") ||
+      textLower.includes("advice") ||
+      extracted?.intent === "GENERAL_SHOE_HELP" ||
+      extracted?.intent === "PRODUCT_QUESTION"
     ) {
       return "GENERAL_SHOE_HELP";
     }
@@ -875,6 +925,7 @@ export class ShoppingAssistantService {
     // 11. Default: Product Discovery
     return extracted?.intent || "PRODUCT_DISCOVERY";
   }
+
 
   /**
    * Deterministic State Engine (Phase 1): Merges current state with extracted delta (3-state distinction)
@@ -1374,33 +1425,30 @@ export class ShoppingAssistantService {
       }
     }
 
-    // 9. Handle repeated gender/wearer input (e.g. user says "men" again when gender is already known)
+    // 9b. General Footwear Advice, Product Questions, & Casual Q&A
+    const currIntent = (state.intent || "") as string;
+    const updIntent = (updates?.intent || "") as string;
     if (
-      (textLower === "men" || textLower === "women") &&
-      state.gender?.toLowerCase() === textLower
+      currIntent === "GENERAL_SHOE_HELP" ||
+      currIntent === "PRODUCT_QUESTION" ||
+      currIntent === "CASUAL_CONVERSATION" ||
+      updIntent === "GENERAL_SHOE_HELP" ||
+      updIntent === "PRODUCT_QUESTION" ||
+      updIntent === "CASUAL_CONVERSATION"
     ) {
-      if (!state.size) {
-        return {
-          nextAction: "ASK_SIZE",
-          nextQuestion: { field: "SIZE", type: "SIZE" },
-          replyMessage: `Yes, I've got that they're for ${textLower}. What shoe size do you wear?`,
-          canSearchCatalog: false,
-        };
-      } else if (!state.purpose && !state.brand) {
-        return {
-          nextAction: "ASK_PURPOSE",
-          nextQuestion: {
-            field: "PURPOSE",
-            type: "CHOICE",
-            options: ["Everyday sneakers", "Sports shoes", "Formal shoes"],
-          },
-          replyMessage: `Yes, I've got that they're for ${textLower}. What style or purpose are you looking for: everyday sneakers, sports shoes, or formal shoes?`,
-          canSearchCatalog: false,
-        };
-      }
+      return {
+        nextAction: "CASUAL_REPLY",
+        nextQuestion: null,
+        replyMessage:
+          updates?.language?.naturalReply ||
+          "I can help with shoe styles, fit, features, and recommendations. What are you looking for?",
+        canSearchCatalog: false,
+      };
     }
 
+
     // 10. Size is missing -> ASK_SIZE (Wearer-aware phrasing)
+
     if (state.size === null || state.size === undefined) {
       let sizePrompt = "What shoe size should I look for?";
       if (wearer?.relation === "daughter") {
@@ -2285,6 +2333,7 @@ export class ShoppingAssistantService {
           updates.size = Math.round(num);
           updates.sizeSystemHint = "EU";
           updates.isInvalidSize = false;
+          updates.isAmbiguousSmallSize = false;
         } else if (
           (detectedSystemHint === "US" || detectedSystemHint === "UK") ||
           (!isNaN(num) && num >= 4 && num <= 14 && detectedSystemHint !== "EU")
@@ -2299,6 +2348,7 @@ export class ShoppingAssistantService {
           updates.isInvalidSize = true;
           updates.isAmbiguousSmallSize = false;
         }
+
       }
     }
 

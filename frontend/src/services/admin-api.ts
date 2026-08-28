@@ -1,6 +1,60 @@
 import { apiRequest } from "./api";
 import type { PaginatedResult } from "./order-api";
 
+export type CustomerActivityType =
+  | "CHAT_MESSAGE"
+  | "ORDER_PLACED"
+  | "REVIEW_SUBMITTED"
+  | "RETURN_REQUESTED"
+  | "ACCOUNT_CREATED";
+
+export interface CompactProductDto {
+  id: string;
+  name: string;
+  slug: string;
+  brand: string;
+  category: string;
+  price: number;
+  salePrice: number | null;
+  displayPrice: number;
+  image: string;
+  inStock: boolean;
+  availableSizes: number[];
+}
+
+export interface CustomerConversationSummary {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessageAt: string;
+  lastMessageSnippet: string | null;
+}
+
+export interface CustomerChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+  products?: CompactProductDto[];
+}
+
+export interface CustomerConversationDetail {
+  id: string;
+  customerId: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  messages: CustomerChatMessage[];
+}
+
+export interface BackendCustomerConversationsResponse {
+  customerId: string;
+  totalConversations: number;
+  latestConversationAt: string | null;
+  conversations: CustomerConversationSummary[];
+}
+
 export interface BackendCustomerItem {
   id: string;
   fullName: string;
@@ -14,10 +68,14 @@ export interface BackendCustomerItem {
   reviewCount: number;
   returnCount: number;
   totalSpent: number;
+  lastActivityAt?: string;
+  lastActivityType?: CustomerActivityType;
 }
 
 export interface BackendCustomerDetail extends BackendCustomerItem {
+  conversationCount?: number;
   addresses: Array<{
+
     id: string;
     label?: string | null;
     recipientName: string;
@@ -146,7 +204,19 @@ export const adminApi = {
   getCustomerById: (id: string) =>
     apiRequest<BackendCustomerDetail>(`/admin/customers/${id}`, { method: "GET" }),
 
+  getCustomerConversations: (id: string) =>
+    apiRequest<BackendCustomerConversationsResponse>(`/admin/customers/${id}/conversations`, {
+      method: "GET",
+    }),
+
+  getCustomerConversationById: (customerId: string, conversationId: string) =>
+    apiRequest<CustomerConversationDetail>(
+      `/admin/customers/${customerId}/conversations/${conversationId}`,
+      { method: "GET" },
+    ),
+
   updateCustomerStatus: (id: string, isActive: boolean) =>
+
     apiRequest<BackendCustomerItem>(`/admin/customers/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ isActive }),

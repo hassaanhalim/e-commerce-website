@@ -1,6 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query, Req, UseGuards } from "@nestjs/common";
-import { JwtAuthGuard } from "../../auth/guards/jwt-auth.guard";
-import { RolesGuard } from "../../auth/guards/roles.guard";
+import { Body, Controller, Get, Param, Patch, Query, Req } from "@nestjs/common";
 import { Roles } from "../../auth/decorators/roles.decorator";
 import { UserRole } from "@prisma/client";
 import { AdminCustomersService, CustomerQueryDto } from "./admin-customers.service";
@@ -20,6 +18,19 @@ export class AdminCustomersController {
     return this.customersService.findOne(id);
   }
 
+  @Get(":id/conversations")
+  async getCustomerConversations(@Param("id") id: string) {
+    return this.customersService.getCustomerConversations(id);
+  }
+
+  @Get(":id/conversations/:conversationId")
+  async getCustomerConversationDetail(
+    @Param("id") id: string,
+    @Param("conversationId") conversationId: string,
+  ) {
+    return this.customersService.getCustomerConversationDetail(id, conversationId);
+  }
+
   @Patch(":id/status")
   async updateCustomerStatus(
     @Param("id") id: string,
@@ -29,3 +40,4 @@ export class AdminCustomersController {
     return this.customersService.updateStatus(id, Boolean(isActive), req.user.id);
   }
 }
+
