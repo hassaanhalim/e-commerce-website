@@ -108,31 +108,74 @@ export function TrackOrderPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-black px-3 py-1 text-xs font-bold text-white">
+              <span
+                className={`rounded-lg px-3 py-1 text-xs font-bold ${
+                  trackingResult.status === "CANCELLED"
+                    ? "bg-rose-100 text-rose-800 border border-rose-200"
+                    : trackingResult.status === "DELIVERED"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-black text-white"
+                }`}
+              >
                 {trackingResult.status}
               </span>
               <span className="rounded-lg bg-gray-100 border border-gray-200 px-3 py-1 text-xs font-bold text-gray-800">
-                Payment: {trackingResult.paymentStatus}
+                {trackingResult.status === "CANCELLED"
+                  ? trackingResult.paymentStatus === "PAID" || trackingResult.paymentStatus === "REFUNDED"
+                    ? "Payment: Refunded"
+                    : "Payment: Voided"
+                  : `Payment: ${trackingResult.paymentStatus}`}
               </span>
             </div>
           </div>
+
+          {/* Cancelled Notice */}
+          {trackingResult.status === "CANCELLED" && (
+            <div className="rounded-xl bg-rose-50 border border-rose-200 p-4 text-xs text-rose-900 font-medium">
+              <p className="font-bold text-rose-950">Shipment Cancelled</p>
+              <p className="mt-0.5 text-rose-800/90 text-[11px]">
+                This order was cancelled and is no longer in transit. Reserved items were returned to inventory and any applicable charges voided.
+              </p>
+            </div>
+          )}
 
           {/* Timeline */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Status Timeline</h3>
             <div className="space-y-3">
-              {trackingResult.timeline.map((h, idx) => (
-                <div key={idx} className="flex items-start gap-3 text-xs">
-                  <div className="mt-1 h-3 w-3 rounded-full bg-emerald-600 shrink-0" />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-gray-950">{h.status}</span>
-                      <span className="text-gray-400 text-[11px]">{new Date(h.timestamp).toLocaleString("en-PK")}</span>
+              {trackingResult.timeline.map((h, idx) => {
+                const isStepCancelled = h.status === "CANCELLED";
+                const isStepDelivered = h.status === "DELIVERED";
+
+                return (
+                  <div key={idx} className="flex items-start gap-3 text-xs">
+                    <div
+                      className={`mt-1 h-3 w-3 rounded-full shrink-0 ${
+                        isStepCancelled ? "bg-rose-600" : isStepDelivered ? "bg-emerald-600" : "bg-black"
+                      }`}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`font-bold ${
+                            isStepCancelled
+                              ? "text-rose-700 font-extrabold"
+                              : isStepDelivered
+                              ? "text-emerald-800"
+                              : "text-gray-950"
+                          }`}
+                        >
+                          {h.status}
+                        </span>
+                        <span className="text-gray-400 text-[11px]">
+                          {new Date(h.timestamp).toLocaleString("en-PK")}
+                        </span>
+                      </div>
+                      {h.note && <p className="text-gray-500 font-medium mt-0.5">{h.note}</p>}
                     </div>
-                    {h.note && <p className="text-gray-500 font-medium mt-0.5">{h.note}</p>}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

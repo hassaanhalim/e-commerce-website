@@ -32,7 +32,7 @@ export const authApi = {
     }),
 
   verifyEmail: (token: string) =>
-    apiRequest<MessageResponse>("/auth/verify-email", {
+    apiRequest<AuthUser>("/auth/verify-email", {
       method: "POST",
       body: JSON.stringify({ token }),
       retryOnUnauthorized: false,

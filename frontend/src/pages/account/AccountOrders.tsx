@@ -101,7 +101,7 @@ export function AccountOrders() {
                       ord.status === "DELIVERED"
                         ? "bg-emerald-100 text-emerald-800"
                         : ord.status === "CANCELLED"
-                        ? "bg-red-100 text-red-800"
+                        ? "bg-rose-100 text-rose-800 border border-rose-200"
                         : ord.status === "SHIPPED"
                         ? "bg-blue-100 text-blue-800"
                         : "bg-amber-100 text-amber-800"
@@ -112,12 +112,20 @@ export function AccountOrders() {
 
                   <span
                     className={`rounded-lg px-2.5 py-1 text-xs font-bold ${
-                      ord.paymentStatus === "PAID"
+                      ord.status === "CANCELLED"
+                        ? ord.paymentStatus === "PAID" || ord.paymentStatus === "REFUNDED"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-gray-100 text-gray-600 border border-gray-200"
+                        : ord.paymentStatus === "PAID"
                         ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                         : "bg-gray-100 text-gray-600"
                     }`}
                   >
-                    Payment: {ord.paymentStatus}
+                    {ord.status === "CANCELLED"
+                      ? ord.paymentStatus === "PAID" || ord.paymentStatus === "REFUNDED"
+                        ? "Payment: Refunded"
+                        : "Payment: Voided"
+                      : `Payment: ${ord.paymentStatus}`}
                   </span>
                 </div>
               </div>
@@ -126,7 +134,10 @@ export function AccountOrders() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="space-y-1">
                   <p className="text-xs font-bold text-gray-900">
-                    {ord.items.length} {ord.items.length === 1 ? "Item" : "Items"}
+                    {ord.items.length} {ord.items.length === 1 ? "Item" : "Items"}{" "}
+                    {ord.status === "CANCELLED" && (
+                      <span className="text-[11px] font-semibold text-rose-700">(Order Cancelled)</span>
+                    )}
                   </p>
                   <p className="text-xs text-gray-500 line-clamp-1">
                     {ord.items.map((i) => i.productNameSnapshot).join(", ")}
@@ -135,8 +146,19 @@ export function AccountOrders() {
 
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-[10px] uppercase font-bold text-gray-400">Total Amount</p>
-                    <p className="text-sm font-extrabold text-gray-950">{formatPrice(Number(ord.total))}</p>
+                    <p className="text-[10px] uppercase font-bold text-gray-400">
+                      {ord.status === "CANCELLED" ? "Amount Due" : "Total Amount"}
+                    </p>
+                    {ord.status === "CANCELLED" ? (
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-xs text-gray-400 line-through font-semibold">
+                          {formatPrice(Number(ord.total))}
+                        </span>
+                        <span className="text-sm font-extrabold text-emerald-700">Rs 0</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-extrabold text-gray-950">{formatPrice(Number(ord.total))}</p>
+                    )}
                   </div>
 
                   <Link

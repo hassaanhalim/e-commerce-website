@@ -4,6 +4,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import PageLoader from "./components/common/PageLoader";
 import Footer from "./components/layout/Footer";
 import Navbar from "./components/layout/Navbar";
+import MobileBottomNav from "./components/layout/MobileBottomNav";
 import ScrollToTop from "./components/layout/ScrollToTop";
 import ShoppingAssistant from "./components/shopping-assistant/ShoppingAssistant";
 
@@ -78,7 +79,7 @@ function App() {
       <ScrollToTop />
       {!isAdminRoute && <Navbar />}
 
-      <div className="flex-1">
+      <div className="flex-1 pb-20 lg:pb-0">
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -154,6 +155,7 @@ function App() {
       </div>
 
       {!isAdminRoute && <Footer />}
+      {!isAdminRoute && <MobileBottomNav />}
       {showShoppingAssistant && <ShoppingAssistant />}
     </div>
   );

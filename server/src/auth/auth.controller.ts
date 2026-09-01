@@ -49,11 +49,16 @@ export class AuthController {
 
   @Post("verify-email")
   @Public()
-  @ApiOperation({ summary: "Verify email address using verification token" })
+  @ApiOperation({ summary: "Verify email address using verification token and authenticate" })
   @ApiBody({ type: VerifyEmailDto })
-  @ApiOkResponse({ description: "Email verified successfully." })
-  async verifyEmail(@Body() dto: VerifyEmailDto) {
-    return this.authService.verifyEmail(dto.token);
+  @ApiOkResponse({ description: "Email verified successfully and user logged in." })
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.verifyEmail(dto.token);
+    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+    return result.user;
   }
 
   @Post("resend-verification")

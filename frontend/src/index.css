@@ -118,6 +118,15 @@
   .animate-popIn {
     animation: popIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 @keyframes fadeIn {

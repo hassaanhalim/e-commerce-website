@@ -245,7 +245,7 @@ export class AuthService {
     };
   }
 
-  async verifyEmail(token: string): Promise<{ message: string }> {
+  async verifyEmail(token: string): Promise<AuthSessionResult> {
     if (!token || typeof token !== "string") {
       throw new BadRequestException("Verification token is required.");
     }
@@ -263,20 +263,26 @@ export class AuthService {
     }
 
     // Mark user verified and remove tokens
-    await this.usersService.markEmailVerified(verificationRecord.userId);
+    const verifiedUser = await this.usersService.markEmailVerified(verificationRecord.userId);
     await this.usersService.deleteVerificationTokensForUser(verificationRecord.userId);
 
-    // Send welcome email
-    if (verificationRecord.user) {
-      await this.mailService.sendWelcomeEmail(
-        verificationRecord.user.email,
-        verificationRecord.user.fullName,
-      );
-    }
+    // Audit log
+    await this.auditService.logAction({
+      actorUserId: verifiedUser.id,
+      action: "EMAIL_VERIFIED",
+      entityType: "USER",
+      entityId: verifiedUser.id,
+      description: `Email verified for account "${verifiedUser.email}".`,
+    });
 
-    return {
-      message: "Your email has been verified successfully. You can now sign in.",
-    };
+    // Send welcome email
+    await this.mailService.sendWelcomeEmail(
+      verifiedUser.email,
+      verifiedUser.fullName,
+    );
+
+    // Automatically create session and tokens for instant authentication
+    return this.createSessionAndTokens(verifiedUser);
   }
 
   async resendVerificationEmail(email: string): Promise<{ message: string }> {

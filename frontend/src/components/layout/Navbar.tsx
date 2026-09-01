@@ -154,10 +154,10 @@ function Navbar() {
   return (
     <>
       {announcement.enabled && announcement.text && (
-        <div className="bg-[#20252B] py-2 px-4 text-center text-xs font-semibold text-white flex items-center justify-center gap-2">
+        <div className="bg-[#5E7063] py-2 px-4 text-center text-xs font-medium text-white flex items-center justify-center gap-1.5 shadow-xs">
           <span>{announcement.text}</span>
           {announcement.linkText && announcement.linkUrl && (
-            <Link to={announcement.linkUrl} className="underline hover:text-[#E5EAE6] transition">
+            <Link to={announcement.linkUrl} className="underline underline-offset-2 hover:text-[#E5EAE6] font-semibold transition ml-1">
               {announcement.linkText} →
             </Link>
           )}
@@ -165,130 +165,143 @@ function Navbar() {
       )}
 
       <header className="sticky top-0 z-50 border-b border-[#E7E3DC] bg-[#FBFAF7]/95 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:gap-5 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
 
-          {/* Logo */}
-          <Link to="/" className="shrink-0 text-xl font-bold tracking-tight text-[#20252B] flex items-center gap-1.5">
-            <span>Shoe Store</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-[#748779]"></span>
-          </Link>
+          {/* ──────────────── Desktop Header (lg:flex) ──────────────── */}
+          <div className="hidden w-full items-center gap-6 lg:flex">
+            {/* Logo */}
+            <Link to="/" className="shrink-0 text-xl font-bold tracking-tight text-[#20252B] flex items-center gap-1.5">
+              <span>Shoe Store</span>
+              <span className="h-2 w-2 rounded-full bg-[#748779]"></span>
+            </Link>
 
-          {/* Desktop nav */}
-          <nav className="hidden items-center gap-7 lg:flex" aria-label="Main navigation">
-            <NavLink to="/" end className={desktopLinkClass}>Home</NavLink>
-            <NavLink to="/shop" className={desktopLinkClass}>Shop</NavLink>
-          </nav>
+            {/* Desktop Nav */}
+            <nav className="flex items-center gap-7" aria-label="Main navigation">
+              <NavLink to="/" end className={desktopLinkClass}>Home</NavLink>
+              <NavLink to="/shop" className={desktopLinkClass}>Shop</NavLink>
+            </nav>
 
-          {/* Desktop search */}
-          <form onSubmit={handleSearch} className="hidden min-w-0 flex-1 md:flex" role="search">
-            <label htmlFor="desktopSearch" className="sr-only">Search products</label>
-            <div className="flex w-full items-center overflow-hidden rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] transition focus-within:border-[#748779] focus-within:bg-white focus-within:ring-1 focus-within:ring-[#748779]">
-              <span className="shrink-0 pl-3 text-[#667085]">
-                <IconSearch className="h-4 w-4" />
-              </span>
-              <input
-                id="desktopSearch"
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search shoes, brands, categories…"
-                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-[#20252B] outline-none placeholder:text-[#667085]"
-              />
-              <button
-                type="submit"
-                className="shrink-0 border-l border-[#E7E3DC] px-4 py-2 text-sm font-semibold text-[#667085] transition hover:bg-[#FAF9F6] hover:text-[#20252B]"
-              >
-                Search
-              </button>
-            </div>
-          </form>
-
-          {/* Desktop right actions */}
-          <div className="ml-auto hidden items-center gap-1 lg:flex">
-            {!isLoading && !user && (
-              <>
-                <NavLink to="/login" className={desktopLinkClass}>Login</NavLink>
-                <Link
-                  to="/register"
-                  className="ml-3 rounded-xl bg-[#748779] px-4.5 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-[#5E7063]"
+            {/* Desktop search */}
+            <form onSubmit={handleSearch} className="min-w-0 flex-1 max-w-lg mx-auto" role="search">
+              <label htmlFor="desktopSearch" className="sr-only">Search products</label>
+              <div className="flex w-full items-center overflow-hidden rounded-xl border border-[#E7E3DC] bg-[#F7F5F1] transition focus-within:border-[#748779] focus-within:bg-white focus-within:ring-1 focus-within:ring-[#748779]">
+                <span className="shrink-0 pl-3 text-[#667085]">
+                  <IconSearch className="h-4 w-4" />
+                </span>
+                <input
+                  id="desktopSearch"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search shoes, brands, categories…"
+                  className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-[#20252B] outline-none placeholder:text-[#667085]"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 border-l border-[#E7E3DC] px-4 py-2 text-sm font-semibold text-[#667085] transition hover:bg-[#FAF9F6] hover:text-[#20252B]"
                 >
-                  Register
-                </Link>
-              </>
-            )}
+                  Search
+                </button>
+              </div>
+            </form>
 
-            {!isLoading && user?.role === "CUSTOMER" && (
+            {/* Desktop right actions */}
+            <div className="ml-auto flex items-center gap-1">
+              {!isLoading && !user && (
+                <>
+                  <NavLink to="/login" className={desktopLinkClass}>Login</NavLink>
+                  <Link
+                    to="/register"
+                    className="ml-3 rounded-xl bg-[#748779] px-4.5 py-2 text-sm font-semibold text-white shadow-xs transition hover:bg-[#5E7063]"
+                  >
+                    Register
+                  </Link>
+                </>
+              )}
+
+              {!isLoading && user?.role === "CUSTOMER" && (
+                <NavLink
+                  to="/account"
+                  aria-label="My account"
+                  className="flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
+                >
+                  <IconUser />
+                </NavLink>
+              )}
+
+              {!isLoading && user?.role === "ADMIN" && (
+                <NavLink to="/admin" className={desktopLinkClass}>Admin</NavLink>
+              )}
+
+              {!isLoading && user && (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="ml-2 text-sm font-medium text-[#667085] transition hover:text-[#20252B]"
+                >
+                  Logout
+                </button>
+              )}
+
               <NavLink
-                to="/account"
-                aria-label="My account"
-                className="flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
+                to={wishlistPath}
+                aria-label={`Wishlist${wishlistCount > 0 ? `, ${wishlistCount} items` : ""}`}
+                className="relative ml-1 flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
               >
-                <IconUser />
+                <IconHeart />
+                <Badge count={wishlistCount} />
               </NavLink>
-            )}
 
-            {!isLoading && user?.role === "ADMIN" && (
-              <NavLink to="/admin" className={desktopLinkClass}>Admin</NavLink>
-            )}
-
-            {!isLoading && user && (
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="ml-2 text-sm font-medium text-[#667085] transition hover:text-[#20252B]"
+              <NavLink
+                to="/cart"
+                aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
+                className="relative flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
               >
-                Logout
-              </button>
-            )}
-
-            <NavLink
-              to={wishlistPath}
-              aria-label={`Wishlist${wishlistCount > 0 ? `, ${wishlistCount} items` : ""}`}
-              className="relative ml-1 flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
-            >
-              <IconHeart />
-              <Badge count={wishlistCount} />
-            </NavLink>
-
-            <NavLink
-              to="/cart"
-              aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
-              className="relative flex items-center justify-center rounded-xl p-2 text-[#667085] transition hover:bg-[#F7F5F1] hover:text-[#20252B]"
-            >
-              <IconBag />
-              <Badge count={cartCount} />
-            </NavLink>
+                <IconBag />
+                <Badge count={cartCount} />
+              </NavLink>
+            </div>
           </div>
 
-          {/* Mobile right actions */}
-          <div className="ml-auto flex items-center gap-0.5 lg:hidden">
-            <NavLink
-              to={wishlistPath}
-              aria-label={`Wishlist${wishlistCount > 0 ? `, ${wishlistCount} items` : ""}`}
-              className="relative flex items-center justify-center rounded-xl p-2 text-[#667085]"
-            >
-              <IconHeart />
-              <Badge count={wishlistCount} />
-            </NavLink>
-
-            <NavLink
-              to="/cart"
-              aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
-              className="relative flex items-center justify-center rounded-xl p-2 text-[#667085]"
-            >
-              <IconBag />
-              <Badge count={cartCount} />
-            </NavLink>
-
+          {/* ──────────────── Mobile Header (lg:hidden) ──────────────── */}
+          <div className="flex w-full items-center justify-between lg:hidden">
+            {/* Left: Hamburger button */}
             <button
               type="button"
               aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen((v) => !v)}
-              className="ml-1 flex items-center justify-center rounded-xl border border-[#E7E3DC] p-2 text-[#20252B] transition hover:bg-[#F7F5F1]"
+              className="flex h-10 w-10 items-center justify-center -ml-2 text-[#20252B] transition active:scale-95"
             >
-              {mobileMenuOpen ? <IconClose /> : <IconMenu />}
+              {mobileMenuOpen ? <IconClose className="h-6 w-6" /> : <IconMenu className="h-6 w-6" />}
             </button>
+
+            {/* Center / Brand: Shoe Store • */}
+            <Link to="/" className="text-xl font-bold tracking-tight text-[#20252B] flex items-center gap-1.5">
+              <span>Shoe Store</span>
+              <span className="h-2 w-2 rounded-full bg-[#748779]"></span>
+            </Link>
+
+            {/* Right: Wishlist & Cart */}
+            <div className="flex items-center gap-1 -mr-2">
+              <NavLink
+                to={wishlistPath}
+                aria-label={`Wishlist${wishlistCount > 0 ? `, ${wishlistCount} items` : ""}`}
+                className="relative flex h-10 w-10 items-center justify-center text-[#20252B] transition active:scale-95"
+              >
+                <IconHeart className="h-6 w-6 stroke-[1.75]" />
+                <Badge count={wishlistCount} />
+              </NavLink>
+
+              <NavLink
+                to="/cart"
+                aria-label={`Shopping cart${cartCount > 0 ? `, ${cartCount} items` : ""}`}
+                className="relative flex h-10 w-10 items-center justify-center text-[#20252B] transition active:scale-95"
+              >
+                <IconBag className="h-6 w-6 stroke-[1.75]" />
+                <Badge count={cartCount} />
+              </NavLink>
+            </div>
           </div>
         </div>
 

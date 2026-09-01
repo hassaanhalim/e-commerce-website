@@ -27,7 +27,7 @@ interface AuthContextValue {
   login: (input: LoginUserInput) => Promise<AuthUser>;
   loginWithGoogle: (credential: string) => Promise<AuthUser>;
   register: (input: RegisterUserInput) => Promise<RegisterResponse>;
-  verifyEmail: (token: string) => Promise<MessageResponse>;
+  verifyEmail: (token: string) => Promise<AuthUser>;
   resendVerification: (email: string) => Promise<MessageResponse>;
   logout: () => Promise<void>;
   logoutAll: () => Promise<void>;
@@ -195,9 +195,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyEmail = useCallback(
     async (token: string) => {
-      return authApi.verifyEmail(token);
+      const authenticatedUser = await authApi.verifyEmail(token);
+      setAuthenticatedUser(authenticatedUser);
+      return authenticatedUser;
     },
-    [],
+    [setAuthenticatedUser],
   );
 
   const resendVerification = useCallback(

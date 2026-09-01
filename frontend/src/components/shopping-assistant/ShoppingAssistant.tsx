@@ -430,7 +430,7 @@ export function ShoppingAssistant() {
           style={{
             maxHeight: `min(540px, calc(100vh - ${headerBottom + 16}px - var(--panel-bottom-spacing, 5.5rem)))`,
           }}
-          className="fixed bottom-20 right-3 z-40 flex h-[540px] [--panel-bottom-spacing:5rem] sm:[--panel-bottom-spacing:5.5rem] w-[calc(100vw-24px)] max-w-[390px] flex-col overflow-hidden rounded-2xl border border-[#E7E3DC] bg-white shadow-[0_16px_48px_rgba(32,37,43,0.14)] animate-popIn sm:bottom-22 sm:right-6 sm:w-[380px]"
+          className="fixed bottom-20 right-3 z-40 flex h-[540px] [--panel-bottom-spacing:5.5rem] w-[calc(100vw-24px)] max-w-[390px] flex-col overflow-hidden rounded-2xl border border-[#E7E3DC] bg-white shadow-[0_16px_48px_rgba(32,37,43,0.14)] animate-popIn lg:bottom-22 lg:right-6 lg:w-[380px]"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-[#E7E3DC] bg-[#FBFAF7] px-4 py-3 sm:px-4.5">
@@ -614,14 +614,14 @@ export function ShoppingAssistant() {
         }
         aria-expanded={isOpen}
         aria-controls="shopping-assistant-panel"
-        className={`fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full text-white shadow-[0_8px_24px_rgba(116,135,121,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_12px_28px_rgba(116,135,121,0.45)] focus-visible:ring-4 focus-visible:ring-[#748779]/30 active:scale-95 sm:bottom-6 sm:right-6 ${
+        className={`fixed bottom-20 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_8px_24px_rgba(116,135,121,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_12px_28px_rgba(116,135,121,0.45)] focus-visible:ring-4 focus-visible:ring-[#748779]/30 active:scale-95 lg:bottom-6 lg:right-6 lg:h-14 lg:w-14 ${
           isOpen ? "bg-[#20252B] rotate-90" : "bg-[#748779] rotate-0"
         }`}
       >
         {isOpen ? (
-          <IconClose className="h-6 w-6" />
+          <IconClose className="h-5 w-5 lg:h-6 lg:w-6" />
         ) : (
-          <IconChatBubble className="h-6 w-6" />
+          <IconChatBubble className="h-5 w-5 lg:h-6 lg:w-6" />
         )}
       </button>
     </>

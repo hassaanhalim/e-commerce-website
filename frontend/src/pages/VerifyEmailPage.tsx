@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../context/AuthContext";
 
 export function VerifyEmailPage() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const navigate = useNavigate();
   const { verifyEmail, resendVerification } = useAuth();
 
   const [status, setStatus] = useState<"verifying" | "success" | "error">(
@@ -17,16 +18,25 @@ export function VerifyEmailPage() {
   const [resendEmail, setResendEmail] = useState("");
   const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent">("idle");
   const [resendMessage, setResendMessage] = useState("");
+  const [redirectTarget, setRedirectTarget] = useState("/account");
 
   useEffect(() => {
     if (!token) return;
 
     let isMounted = true;
+    let redirectTimer: ReturnType<typeof setTimeout> | null = null;
 
     verifyEmail(token)
-      .then(() => {
+      .then((user) => {
         if (isMounted) {
+          const destination = user.role === "ADMIN" ? "/admin" : "/account";
+          setRedirectTarget(destination);
           setStatus("success");
+
+          // Automatic seamless redirect into customer dashboard
+          redirectTimer = setTimeout(() => {
+            navigate(destination, { replace: true });
+          }, 1600);
         }
       })
       .catch((err: unknown) => {
@@ -42,8 +52,9 @@ export function VerifyEmailPage() {
 
     return () => {
       isMounted = false;
+      if (redirectTimer) clearTimeout(redirectTimer);
     };
-  }, [token, verifyEmail]);
+  }, [token, verifyEmail, navigate]);
 
   async function handleResendSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,7 +86,7 @@ export function VerifyEmailPage() {
               Verifying your email...
             </h1>
             <p className="mt-2 text-sm text-[#667085]">
-              Please wait while we activate your customer account.
+              Please wait while we activate your customer account and log you in.
             </p>
           </div>
         )}
@@ -97,16 +108,17 @@ export function VerifyEmailPage() {
             </h1>
 
             <p className="mt-3 text-sm leading-relaxed text-[#667085]">
-              Your email address has been verified successfully. Your account is ready for shopping.
+              Your email has been verified and you are now automatically signed in. Redirecting to your account dashboard...
             </p>
 
             <div className="mt-7">
-              <Link
-                to="/login"
+              <button
+                type="button"
+                onClick={() => navigate(redirectTarget, { replace: true })}
                 className="inline-block w-full rounded-xl bg-[#748779] px-6 py-3 text-sm font-semibold text-white shadow-xs transition hover:bg-[#5E7063] cursor-pointer"
               >
-                Proceed to Sign In
-              </Link>
+                Go to My Account Dashboard →
+              </button>
             </div>
           </div>
         )}
