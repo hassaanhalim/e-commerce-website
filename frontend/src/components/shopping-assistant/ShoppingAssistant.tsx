@@ -202,6 +202,7 @@ export function ShoppingAssistant() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
   // Authenticated vs Guest history synchronization
   useEffect(() => {
@@ -322,6 +323,27 @@ export function ShoppingAssistant() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, showClearConfirm]);
 
+  // Close when clicking or tapping outside panel
+  useEffect(() => {
+    if (!isOpen) return;
+
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (
+        panelRef.current &&
+        !panelRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isOpen]);
+
   const handleSendMessage = async (textToSend?: string) => {
     const content = (textToSend !== undefined ? textToSend : input).trim();
     if (!content || isTyping) return;
@@ -423,6 +445,7 @@ export function ShoppingAssistant() {
           ───────────────────────────────────────────── */}
       {isOpen && (
         <section
+          ref={panelRef}
           id="shopping-assistant-panel"
           role="dialog"
           aria-label="Shopping Assistant"
@@ -602,28 +625,22 @@ export function ShoppingAssistant() {
       )}
 
       {/* ─────────────────────────────────────────────
-          Floating Launcher Button
+          Floating Launcher Button (hidden when panel is open)
           ───────────────────────────────────────────── */}
-      <button
-        type="button"
-        id="shopping-assistant-launcher"
-        onClick={() => setIsOpen((prev) => !prev)}
-        title={isOpen ? "Close shopping assistant" : "Chat with shopping assistant"}
-        aria-label={
-          isOpen ? "Close shopping assistant" : "Open shopping assistant"
-        }
-        aria-expanded={isOpen}
-        aria-controls="shopping-assistant-panel"
-        className={`fixed bottom-20 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full text-white shadow-[0_8px_24px_rgba(116,135,121,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_12px_28px_rgba(116,135,121,0.45)] focus-visible:ring-4 focus-visible:ring-[#748779]/30 active:scale-95 lg:bottom-6 lg:right-6 lg:h-14 lg:w-14 ${
-          isOpen ? "bg-[#20252B] rotate-90" : "bg-[#748779] rotate-0"
-        }`}
-      >
-        {isOpen ? (
-          <IconClose className="h-5 w-5 lg:h-6 lg:w-6" />
-        ) : (
+      {!isOpen && (
+        <button
+          type="button"
+          id="shopping-assistant-launcher"
+          onClick={() => setIsOpen(true)}
+          title="Chat with shopping assistant"
+          aria-label="Open shopping assistant"
+          aria-expanded={false}
+          aria-controls="shopping-assistant-panel"
+          className="fixed bottom-20 right-4 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#748779] text-white shadow-[0_8px_24px_rgba(116,135,121,0.35)] transition-all duration-300 hover:scale-105 hover:shadow-[0_12px_28px_rgba(116,135,121,0.45)] focus-visible:ring-4 focus-visible:ring-[#748779]/30 active:scale-95 lg:bottom-6 lg:right-6 lg:h-14 lg:w-14"
+        >
           <IconChatBubble className="h-5 w-5 lg:h-6 lg:w-6" />
-        )}
-      </button>
+        </button>
+      )}
     </>
   );
 }

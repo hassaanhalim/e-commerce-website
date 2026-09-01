@@ -730,10 +730,10 @@ export function ShopPage() {
       {loading ? (
         <section
           aria-label="Loading products"
-          className={`grid gap-3 min-[375px]:gap-4 sm:gap-5 lg:gap-6 ${
+          className={`grid gap-2.5 sm:gap-4 lg:gap-6 ${
             gridCols === 4
-              ? "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-              : "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3"
+              ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"
+              : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3"
           }`}
         >
           {Array.from({ length: 8 }).map((_, idx) => (
@@ -778,10 +778,10 @@ export function ShopPage() {
       ) : (
         <>
           <section
-            className={`grid gap-3 min-[375px]:gap-4 sm:gap-5 lg:gap-6 ${
+            className={`grid gap-2.5 sm:gap-4 lg:gap-6 ${
               gridCols === 4
-                ? "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                : "grid-cols-1 min-[375px]:grid-cols-2 lg:grid-cols-3"
+                ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"
+                : "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3"
             }`}
           >
             {productsList.map((product) => (
