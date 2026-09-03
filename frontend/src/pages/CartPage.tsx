@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { formatPrice } from "../utils/formatPrice";
+import { AlertIcon } from "../components/common/Icons";
 
 function CartPage() {
   const { user } = useAuth();
@@ -151,8 +152,9 @@ function CartPage() {
                     </div>
 
                     {warning && (
-                      <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-800">
-                        ⚠ {warning}
+                      <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-800">
+                        <AlertIcon className="h-4 w-4 shrink-0 text-amber-600" />
+                        <span>{warning}</span>
                       </div>
                     )}
                   </div>

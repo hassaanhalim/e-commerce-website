@@ -1,5 +1,16 @@
 import { useEffect, useState } from "react";
 import { homepageApi, type HomepageSettingsData, type HomepageStatItem, type HomepageBenefitItem } from "../../services/homepage-api";
+import {
+  MegaphoneIcon,
+  ImageIcon,
+  BarChartIcon,
+  FolderIcon,
+  ShoppingBagIcon,
+  TagIcon,
+  ShieldIcon,
+  MailIcon,
+  LayoutIcon,
+} from "../../components/common/Icons";
 
 type TabId = "announcement" | "hero" | "stats" | "categories" | "arrivals" | "promo" | "benefits" | "newsletter" | "footer";
 
@@ -155,16 +166,16 @@ export function SettingsPage() {
     );
   }
 
-  const tabs: { id: TabId; label: string; icon: string }[] = [
-    { id: "announcement", label: "Announcement Bar", icon: "📢" },
-    { id: "hero", label: "Hero Section", icon: "🖼️" },
-    { id: "stats", label: "Trust Stats", icon: "📊" },
-    { id: "categories", label: "Category Section", icon: "📁" },
-    { id: "arrivals", label: "New Arrivals", icon: "👟" },
-    { id: "promo", label: "Promo Banner", icon: "🏷️" },
-    { id: "benefits", label: "Benefits", icon: "🛡️" },
-    { id: "newsletter", label: "Newsletter", icon: "✉️" },
-    { id: "footer", label: "Footer Content", icon: "🦶" },
+  const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
+    { id: "announcement", label: "Announcement Bar", icon: <MegaphoneIcon className="h-4 w-4" /> },
+    { id: "hero", label: "Hero Section", icon: <ImageIcon className="h-4 w-4" /> },
+    { id: "stats", label: "Trust Stats", icon: <BarChartIcon className="h-4 w-4" /> },
+    { id: "categories", label: "Category Section", icon: <FolderIcon className="h-4 w-4" /> },
+    { id: "arrivals", label: "New Arrivals", icon: <ShoppingBagIcon className="h-4 w-4" /> },
+    { id: "promo", label: "Promo Banner", icon: <TagIcon className="h-4 w-4" /> },
+    { id: "benefits", label: "Benefits", icon: <ShieldIcon className="h-4 w-4" /> },
+    { id: "newsletter", label: "Newsletter", icon: <MailIcon className="h-4 w-4" /> },
+    { id: "footer", label: "Footer Content", icon: <LayoutIcon className="h-4 w-4" /> },
   ];
 
   return (
@@ -827,12 +838,12 @@ export function SettingsPage() {
                         onChange={(e) => handleUpdateBenefit(idx, { iconKey: e.target.value })}
                         className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs text-gray-900 outline-none focus:border-black cursor-pointer"
                       >
-                        <option value="truck">🚚 Truck / Delivery</option>
-                        <option value="exchange">🔄 Exchange / Returns</option>
-                        <option value="shield">🛡️ Shield / Quality</option>
-                        <option value="support">🎧 Support / Help</option>
-                        <option value="star">⭐ Star / Rating</option>
-                        <option value="heart">❤️ Heart / Loyalty</option>
+                        <option value="truck">Fast Delivery (Truck)</option>
+                        <option value="exchange">Hassle-Free Returns (Exchange)</option>
+                        <option value="shield">Genuine Quality (Shield)</option>
+                        <option value="support">Dedicated Assistance (Support)</option>
+                        <option value="star">Top Rated (Star)</option>
+                        <option value="heart">Customer Loyalty (Heart)</option>
                       </select>
                     </div>
                     <div className="flex items-center pt-5">

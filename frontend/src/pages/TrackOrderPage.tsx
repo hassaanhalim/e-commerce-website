@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { orderApi } from "../services/order-api";
 import type { PublicOrderTrackingResult } from "../types/order";
+import { AlertIcon } from "../components/common/Icons";
 
 export function TrackOrderPage() {
   const [orderNumber, setOrderNumber] = useState("");
@@ -51,8 +52,9 @@ export function TrackOrderPage() {
       {/* Tracking Search Form */}
       <form onSubmit={handleTrackSubmit} className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
         {error && (
-          <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-xs font-semibold text-red-700">
-            ⚠ {error}
+          <div className="flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-200 p-3 text-xs font-semibold text-red-700">
+            <AlertIcon className="h-4 w-4 shrink-0 text-red-600" />
+            <span>{error}</span>
           </div>
         )}
 

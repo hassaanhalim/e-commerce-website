@@ -8,6 +8,14 @@ import type { BackendOrder } from "../../types/order";
 import type { ReturnRequestType } from "../../types/return";
 import { formatPrice } from "../../utils/formatPrice";
 import { useCart } from "../../context/CartContext";
+import {
+  ShoppingBagIcon,
+  CloseIcon,
+  StarIcon,
+  CheckCircleIcon,
+  AlertIcon,
+  PhoneIcon,
+} from "../../components/common/Icons";
 
 export function AccountOrderDetail() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -268,9 +276,10 @@ export function AccountOrderDetail() {
               type="button"
               onClick={handleReorderAll}
               disabled={reordering}
-              className="rounded-xl bg-black px-4 py-2 text-xs font-bold text-white hover:bg-gray-800 transition cursor-pointer shadow-xs disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white hover:bg-gray-800 transition cursor-pointer shadow-xs disabled:opacity-50"
             >
-              {reordering ? "Adding to Cart..." : "🛒 Buy Again (Re-order)"}
+              <ShoppingBagIcon className="h-4 w-4" />
+              <span>{reordering ? "Adding to Cart..." : "Buy Again (Re-order)"}</span>
             </button>
           )}
 
@@ -292,7 +301,7 @@ export function AccountOrderDetail() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-rose-200 text-rose-800 font-extrabold text-sm">
-                ✕
+                <CloseIcon className="h-4 w-4" />
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -305,12 +314,15 @@ export function AccountOrderDetail() {
                   {order.cancellationReason ? `Reason: "${order.cancellationReason}"` : "Cancelled by customer request."}
                   {order.cancelledAt && ` · ${new Date(order.cancelledAt).toLocaleString("en-PK")}`}
                 </p>
-                <p className="text-rose-800/90 text-[11px] font-medium leading-relaxed">
-                  {order.paymentMethod === "CASH_ON_DELIVERY"
-                    ? "✓ No payment is required. Cash on Delivery fulfillment has been cancelled and stock was restored."
-                    : order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED"
-                    ? `✓ Full refund of ${formatPrice(Number(order.total))} has been processed to your original payment method. Items were restocked.`
-                    : "✓ This order is voided. No charges apply and reserved inventory was restored."}
+                <p className="text-rose-800/90 text-[11px] font-medium leading-relaxed flex items-center gap-1.5">
+                  <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    {order.paymentMethod === "CASH_ON_DELIVERY"
+                      ? "No payment is required. Cash on Delivery fulfillment has been cancelled and stock was restored."
+                      : order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED"
+                      ? `Full refund of ${formatPrice(Number(order.total))} has been processed to your original payment method. Items were restocked.`
+                      : "This order is voided. No charges apply and reserved inventory was restored."}
+                  </span>
                 </p>
               </div>
             </div>
@@ -320,9 +332,10 @@ export function AccountOrderDetail() {
                 type="button"
                 onClick={handleReorderAll}
                 disabled={reordering}
-                className="rounded-xl bg-rose-900 px-4 py-2 text-xs font-bold text-white hover:bg-rose-950 transition cursor-pointer shadow-2xs disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-900 px-4 py-2 text-xs font-bold text-white hover:bg-rose-950 transition cursor-pointer shadow-2xs disabled:opacity-50"
               >
-                {reordering ? "Adding..." : "🛒 Buy Again"}
+                <ShoppingBagIcon className="h-3.5 w-3.5" />
+                <span>{reordering ? "Adding..." : "Buy Again"}</span>
               </button>
               <Link
                 to="/shop"
@@ -336,14 +349,16 @@ export function AccountOrderDetail() {
       )}
 
       {actionSuccess && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800">
-          ✓ {actionSuccess}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{actionSuccess}</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-xs font-semibold text-red-700">
-          ⚠ {error}
+        <div className="flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-200 p-4 text-xs font-semibold text-red-700">
+          <AlertIcon className="h-4 w-4 text-red-600 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -469,9 +484,10 @@ export function AccountOrderDetail() {
                         type="button"
                         onClick={() => handleReorderItem(item)}
                         disabled={reorderingItemId === item.id}
-                        className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-[11px] font-bold text-gray-900 hover:border-black transition cursor-pointer disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1 text-[11px] font-bold text-gray-900 hover:border-black transition cursor-pointer disabled:opacity-50"
                       >
-                        {reorderingItemId === item.id ? "Adding..." : "🛒 Buy Again"}
+                        <ShoppingBagIcon className="h-3 w-3" />
+                        <span>{reorderingItemId === item.id ? "Adding..." : "Buy Again"}</span>
                       </button>
                     </div>
                   )}
@@ -482,9 +498,10 @@ export function AccountOrderDetail() {
                       <button
                         type="button"
                         onClick={() => setReviewItem({ id: item.id, productName: item.productNameSnapshot })}
-                        className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-[11px] font-bold text-gray-800 hover:border-black transition cursor-pointer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-[11px] font-bold text-gray-800 hover:border-black transition cursor-pointer"
                       >
-                        ★ Write Review
+                        <StarIcon filled={true} className="h-3 w-3 text-amber-500" />
+                        <span>Write Review</span>
                       </button>
 
                       <button
@@ -549,12 +566,15 @@ export function AccountOrderDetail() {
               )}
             </div>
             {isCancelled && (
-              <p className="text-[11px] text-gray-500 pt-2 border-t border-gray-100 font-semibold">
-                {order.paymentMethod === "CASH_ON_DELIVERY"
-                  ? "✓ No payment due — COD order cancelled."
-                  : order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED"
-                  ? "✓ Refund processed to original method."
-                  : "✓ Order voided — no payment required."}
+              <p className="text-[11px] text-gray-500 pt-2 border-t border-gray-100 font-semibold flex items-center gap-1.5">
+                <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>
+                  {order.paymentMethod === "CASH_ON_DELIVERY"
+                    ? "No payment due — COD order cancelled."
+                    : order.paymentStatus === "PAID" || order.paymentStatus === "REFUNDED"
+                    ? "Refund processed to original method."
+                    : "Order voided — no payment required."}
+                </span>
               </p>
             )}
           </div>
@@ -566,7 +586,10 @@ export function AccountOrderDetail() {
             <p className="text-gray-500">
               {order.shippingAddressSnapshot.city}, {order.shippingAddressSnapshot.country}
             </p>
-            <p className="text-gray-400">📞 {order.shippingAddressSnapshot.phone}</p>
+            <p className="text-gray-400 flex items-center gap-1.5">
+              <PhoneIcon className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+              <span>{order.shippingAddressSnapshot.phone}</span>
+            </p>
           </div>
 
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 shadow-xs space-y-2 text-xs font-semibold text-gray-600">
@@ -623,14 +646,14 @@ export function AccountOrderDetail() {
                 onClick={() => setReviewItem(null)}
                 className="text-gray-400 hover:text-black cursor-pointer"
               >
-                ✕
+                <CloseIcon className="h-5 w-5" />
               </button>
             </div>
             <p className="text-xs font-bold text-gray-700">{reviewItem.productName}</p>
 
             <div className="space-y-1">
               <label className="text-[11px] font-bold uppercase text-gray-400">Rating *</label>
-              <div className="flex gap-2 text-2xl text-amber-400">
+              <div className="flex gap-2">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <button
                     key={star}
@@ -638,7 +661,10 @@ export function AccountOrderDetail() {
                     onClick={() => setReviewRating(star)}
                     className="hover:scale-110 transition cursor-pointer"
                   >
-                    {star <= reviewRating ? "★" : "☆"}
+                    <StarIcon
+                      filled={star <= reviewRating}
+                      className={`h-6 w-6 ${star <= reviewRating ? "text-amber-400" : "text-gray-300"}`}
+                    />
                   </button>
                 ))}
               </div>
@@ -690,7 +716,7 @@ export function AccountOrderDetail() {
                 onClick={() => setReturnItem(null)}
                 className="text-gray-400 hover:text-black cursor-pointer"
               >
-                ✕
+                <CloseIcon className="h-5 w-5" />
               </button>
             </div>
             <p className="text-xs font-bold text-gray-700">{returnItem.productName}</p>

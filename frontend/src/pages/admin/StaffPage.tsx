@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { adminApi, type BackendStaffItem } from "../../services/admin-api";
 import AdminTable, { type Column } from "../../components/admin/AdminTable";
+import { CheckCircleIcon, CloseIcon, AlertIcon } from "../../components/common/Icons";
 
 export function StaffPage() {
   const [staff, setStaff] = useState<BackendStaffItem[]>([]);
@@ -152,8 +153,9 @@ export function StaffPage() {
       </div>
 
       {actionMessage && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
-          ✓ {actionMessage}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{actionMessage}</span>
         </div>
       )}
 
@@ -189,12 +191,15 @@ export function StaffPage() {
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-extrabold text-gray-950">Create Administrator</h3>
-              <button type="button" onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-black">✕</button>
+              <button type="button" onClick={() => setIsAddModalOpen(false)} className="text-gray-400 hover:text-black cursor-pointer">
+                <CloseIcon className="h-5 w-5" />
+              </button>
             </div>
 
             {error && (
-              <div className="rounded-xl bg-red-50 border border-red-200 p-2.5 text-xs font-semibold text-red-700">
-                ⚠ {error}
+              <div className="flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-200 p-2.5 text-xs font-semibold text-red-700">
+                <AlertIcon className="h-4 w-4 text-red-600 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
 

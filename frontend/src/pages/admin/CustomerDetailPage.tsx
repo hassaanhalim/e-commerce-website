@@ -7,6 +7,14 @@ import {
   type CustomerConversationDetail,
 } from "../../services/admin-api";
 import { formatPrice } from "../../utils/formatPrice";
+import {
+  CheckCircleIcon,
+  PhoneIcon,
+  StarRating,
+  MessageIcon,
+  SparklesIcon,
+  ShoppingBagIcon,
+} from "../../components/common/Icons";
 
 export function CustomerDetailPage() {
   const { customerId } = useParams<{ customerId: string }>();
@@ -152,8 +160,9 @@ export function CustomerDetailPage() {
       </div>
 
       {actionMessage && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
-          ✓ {actionMessage}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{actionMessage}</span>
         </div>
       )}
 
@@ -226,7 +235,10 @@ export function CustomerDetailPage() {
                     <p className="font-bold text-gray-900">{addr.recipientName} {addr.isDefault && <span className="text-emerald-700 text-[10px]">(Default)</span>}</p>
                     <p className="text-gray-600">{addr.addressLine1}</p>
                     <p className="text-gray-500">{addr.city}, {addr.country}</p>
-                    <p className="text-gray-400">📞 {addr.phone}</p>
+                    <p className="text-gray-400 flex items-center gap-1.5">
+                      <PhoneIcon className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                      <span>{addr.phone}</span>
+                    </p>
                   </div>
                 ))}
               </div>
@@ -277,7 +289,10 @@ export function CustomerDetailPage() {
                       <div key={rev.id} className="rounded-xl border border-gray-150 bg-gray-50 p-3.5 text-xs space-y-1">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-gray-900">{rev.product?.name || "Product"}</span>
-                          <span className="font-bold text-amber-500">{"★".repeat(rev.rating)} ({rev.status})</span>
+                          <div className="flex items-center gap-1.5">
+                            <StarRating rating={rev.rating} starClassName="h-3 w-3" />
+                            <span className="text-[11px] text-gray-500 font-medium">({rev.status})</span>
+                          </div>
                         </div>
                         {rev.title && <p className="font-semibold text-gray-800">{rev.title}</p>}
                         <p className="text-gray-600 leading-relaxed">{rev.comment}</p>
@@ -349,7 +364,9 @@ export function CustomerDetailPage() {
                 </div>
               ) : conversations.length === 0 ? (
                 <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center space-y-2">
-                  <div className="text-3xl">💬</div>
+                  <div className="flex justify-center text-gray-400">
+                    <MessageIcon className="h-10 w-10" />
+                  </div>
                   <p className="text-sm font-bold text-gray-900">No Shopping Assistant conversations yet.</p>
                   <p className="text-xs text-gray-500 max-w-sm mx-auto">
                     When this customer interacts with the AI Shopping Assistant, their conversation sessions and recommended product references will appear here.
@@ -443,7 +460,16 @@ export function CustomerDetailPage() {
                                   className={`flex flex-col ${isUser ? "items-end" : "items-start"} space-y-1.5`}
                                 >
                                   <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-semibold px-1">
-                                    <span>{isUser ? customer.fullName : "🤖 Shopping Assistant"}</span>
+                                    <span>
+                                      {isUser ? (
+                                        customer.fullName
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-purple-600">
+                                          <SparklesIcon className="h-3 w-3" />
+                                          <span>Shopping Assistant</span>
+                                        </span>
+                                      )}
+                                    </span>
                                     <span>·</span>
                                     <span>{new Date(msg.createdAt).toLocaleTimeString("en-PK", { hour: "2-digit", minute: "2-digit" })}</span>
                                   </div>
@@ -477,8 +503,8 @@ export function CustomerDetailPage() {
                                                 className="h-12 w-12 rounded-lg object-cover bg-gray-50 flex-shrink-0"
                                               />
                                             ) : (
-                                              <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-400 flex-shrink-0">
-                                                👟
+                                              <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 flex-shrink-0">
+                                                <ShoppingBagIcon className="h-5 w-5" />
                                               </div>
                                             )}
 

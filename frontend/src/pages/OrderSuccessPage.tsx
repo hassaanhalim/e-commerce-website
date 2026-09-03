@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router";
 import { orderApi } from "../services/order-api";
 import type { BackendOrder } from "../types/order";
 import { formatPrice } from "../utils/formatPrice";
+import { CheckIcon, PhoneIcon } from "../components/common/Icons";
 
 export function OrderSuccessPage() {
   const [searchParams] = useSearchParams();
@@ -42,8 +43,8 @@ export function OrderSuccessPage() {
   if (error || !order) {
     return (
       <main className="mx-auto max-w-md px-6 py-20 text-center space-y-4">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-3xl">
-          ✓
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 shadow-sm">
+          <CheckIcon className="h-8 w-8 text-emerald-700" />
         </div>
         <h1 className="text-2xl font-bold text-gray-950">Thank You For Your Order!</h1>
         <p className="text-xs text-gray-600 font-medium">Your order has been placed successfully.</p>
@@ -69,8 +70,8 @@ export function OrderSuccessPage() {
     <main className="mx-auto max-w-3xl px-5 py-12 sm:px-6 space-y-8">
       {/* Banner */}
       <div className="rounded-3xl bg-emerald-50 border border-emerald-200 p-8 text-center space-y-3">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-600 text-white text-3xl shadow-sm">
-          ✓
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm">
+          <CheckIcon className="h-8 w-8 text-white" />
         </div>
         <h1 className="text-3xl font-extrabold text-emerald-950">Order Placed Successfully!</h1>
         <p className="text-sm font-semibold text-emerald-800">
@@ -108,7 +109,10 @@ export function OrderSuccessPage() {
           <p className="font-bold text-gray-950 text-sm">{order.shippingAddressSnapshot.recipientName}</p>
           <p className="text-gray-600 font-medium">{order.shippingAddressSnapshot.addressLine1}</p>
           <p className="text-gray-500">{order.shippingAddressSnapshot.city}, {order.shippingAddressSnapshot.country}</p>
-          <p className="text-gray-400">📞 {order.shippingAddressSnapshot.phone}</p>
+          <p className="text-gray-400 flex items-center gap-1.5">
+            <PhoneIcon className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+            <span>{order.shippingAddressSnapshot.phone}</span>
+          </p>
         </div>
 
         {/* Item Snapshots */}

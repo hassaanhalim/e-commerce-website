@@ -3,6 +3,15 @@ import { Link } from "react-router";
 import { adminApi, type BackendCustomerItem } from "../../services/admin-api";
 import { formatPrice } from "../../utils/formatPrice";
 import AdminTable, { type Column } from "../../components/admin/AdminTable";
+import {
+  MessageIcon,
+  ShoppingBagIcon,
+  StarIcon,
+  RefreshIcon,
+  UserIcon,
+  CheckCircleIcon,
+  AlertIcon,
+} from "../../components/common/Icons";
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -21,19 +30,19 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString("en-PK", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function getActivityLabel(type?: string): { title: string; icon: string; dotColor: string } {
+function getActivityLabel(type?: string): { title: string; icon: React.ReactNode; dotColor: string } {
   switch (type) {
     case "CHAT_MESSAGE":
-      return { title: "Chat message", icon: "💬", dotColor: "bg-blue-500" };
+      return { title: "Chat message", icon: <MessageIcon className="h-3 w-3 text-blue-500 shrink-0" />, dotColor: "bg-blue-500" };
     case "ORDER_PLACED":
-      return { title: "Order placed", icon: "🛍️", dotColor: "bg-emerald-500" };
+      return { title: "Order placed", icon: <ShoppingBagIcon className="h-3 w-3 text-emerald-500 shrink-0" />, dotColor: "bg-emerald-500" };
     case "REVIEW_SUBMITTED":
-      return { title: "Review submitted", icon: "⭐", dotColor: "bg-amber-500" };
+      return { title: "Review submitted", icon: <StarIcon filled={true} className="h-3 w-3 text-amber-500 shrink-0" />, dotColor: "bg-amber-500" };
     case "RETURN_REQUESTED":
-      return { title: "Return requested", icon: "🔄", dotColor: "bg-purple-500" };
+      return { title: "Return requested", icon: <RefreshIcon className="h-3 w-3 text-purple-500 shrink-0" />, dotColor: "bg-purple-500" };
     case "ACCOUNT_CREATED":
     default:
-      return { title: "Account created", icon: "👤", dotColor: "bg-gray-400" };
+      return { title: "Account created", icon: <UserIcon className="h-3 w-3 text-gray-400 shrink-0" />, dotColor: "bg-gray-400" };
   }
 }
 
@@ -45,6 +54,7 @@ export function CustomerListPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const fetchCustomers = () => {
     setLoading(true);
@@ -69,6 +79,7 @@ export function CustomerListPage() {
 
   const handleToggleStatus = async (customer: BackendCustomerItem) => {
     setActionMessage("");
+    setActionError("");
     try {
       await adminApi.updateCustomerStatus(customer.id, !customer.isActive);
       setActionMessage(`Customer "${customer.fullName}" status updated.`);
@@ -77,7 +88,7 @@ export function CustomerListPage() {
       const msg = typeof err === "object" && err !== null && "message" in err
         ? (err as { message: string }).message
         : "Failed to update customer status.";
-      setActionMessage(`⚠ ${msg}`);
+      setActionError(msg);
     }
   };
 
@@ -106,7 +117,10 @@ export function CustomerListPage() {
           <div className="space-y-0.5">
             <div className="flex items-center gap-1.5">
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${activity.dotColor}`} />
-              <span className="font-semibold text-gray-900 text-xs">{activity.title}</span>
+              <span className="flex items-center gap-1 font-semibold text-gray-900 text-xs">
+                {activity.icon}
+                <span>{activity.title}</span>
+              </span>
             </div>
             <p className="text-[11px] text-gray-400 font-medium pl-3">· {timeAgo}</p>
           </div>
@@ -178,8 +192,15 @@ export function CustomerListPage() {
       </div>
 
       {actionMessage && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
-          {actionMessage}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{actionMessage}</span>
+        </div>
+      )}
+      {actionError && (
+        <div className="flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-200 p-3 text-xs font-semibold text-red-700">
+          <AlertIcon className="h-4 w-4 text-red-600 shrink-0" />
+          <span>{actionError}</span>
         </div>
       )}
 

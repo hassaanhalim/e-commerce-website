@@ -4,6 +4,13 @@ import { returnApi } from "../../services/return-api";
 import type { ReturnRequestItem, ReturnRequestStatus } from "../../types/return";
 import { formatPrice } from "../../utils/formatPrice";
 import AdminStatusBadge from "../../components/admin/AdminStatusBadge";
+import {
+  CheckCircleIcon,
+  CheckIcon,
+  CloseIcon,
+  AlertIcon,
+  PackageIcon,
+} from "../../components/common/Icons";
 
 export function ReturnDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -101,14 +108,16 @@ export function ReturnDetailPage() {
       </div>
 
       {successMessage && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800">
-          ✓ {successMessage}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{successMessage}</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-xs font-semibold text-red-700">
-          ⚠ {error}
+        <div className="flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-200 p-4 text-xs font-semibold text-red-700">
+          <AlertIcon className="h-4 w-4 text-red-600 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -137,17 +146,19 @@ export function ReturnDetailPage() {
                       type="button"
                       onClick={() => handleStatusChange("APPROVED")}
                       disabled={updating}
-                      className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer"
                     >
-                      ✓ Approve Request
+                      <CheckIcon className="h-3.5 w-3.5" />
+                      <span>Approve Request</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleStatusChange("REJECTED")}
                       disabled={updating}
-                      className="rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-red-700 transition disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-red-700 transition disabled:opacity-50 cursor-pointer"
                     >
-                      ✕ Reject Request
+                      <CloseIcon className="h-3.5 w-3.5" />
+                      <span>Reject Request</span>
                     </button>
                   </>
                 )}
@@ -158,9 +169,10 @@ export function ReturnDetailPage() {
                       type="button"
                       onClick={() => handleStatusChange("RECEIVED")}
                       disabled={updating}
-                      className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer"
                     >
-                      📦 Mark Received
+                      <PackageIcon className="h-3.5 w-3.5" />
+                      <span>Mark Received</span>
                     </button>
                     <button
                       type="button"
@@ -178,9 +190,10 @@ export function ReturnDetailPage() {
                     type="button"
                     onClick={() => handleStatusChange("COMPLETED")}
                     disabled={updating}
-                    className="rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 transition disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-800 transition disabled:opacity-50 cursor-pointer"
                   >
-                    ✓ Complete Request & Process Inventory
+                    <CheckCircleIcon className="h-4 w-4" />
+                    <span>Complete Request & Process Inventory</span>
                   </button>
                 )}
 

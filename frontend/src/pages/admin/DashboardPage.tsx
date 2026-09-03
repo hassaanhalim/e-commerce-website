@@ -3,6 +3,16 @@ import { Link } from "react-router";
 import { adminApi, type BackendDashboardSummary } from "../../services/admin-api";
 import { formatPrice } from "../../utils/formatPrice";
 import AdminStatsCard from "../../components/admin/AdminStatsCard";
+import {
+  CurrencyIcon,
+  TrendingUpIcon,
+  PackageIcon,
+  UsersIcon,
+  AlertIcon,
+  BanIcon,
+  StarIcon,
+  RefreshIcon,
+} from "../../components/common/Icons";
 
 export function DashboardPage() {
   const [summary, setSummary] = useState<BackendDashboardSummary | null>(null);
@@ -49,25 +59,25 @@ export function DashboardPage() {
           title="Gross Paid Revenue"
           value={formatPrice(summary.grossPaidRevenue)}
           description="Total revenue from paid orders"
-          icon={<span className="text-xl">💰</span>}
+          icon={<CurrencyIcon className="h-6 w-6 text-emerald-600" />}
         />
         <AdminStatsCard
           title="Net Revenue"
           value={formatPrice(summary.netRevenue)}
           description={`Gross (${formatPrice(summary.grossPaidRevenue)}) − Refunds (${formatPrice(summary.refundedAmount)})`}
-          icon={<span className="text-xl">📈</span>}
+          icon={<TrendingUpIcon className="h-6 w-6 text-blue-600" />}
         />
         <AdminStatsCard
           title="Total Orders"
           value={summary.totalOrders}
           description={`AOV: ${formatPrice(summary.averageOrderValue)}`}
-          icon={<span className="text-xl">📦</span>}
+          icon={<PackageIcon className="h-6 w-6 text-indigo-600" />}
         />
         <AdminStatsCard
           title="Total Customers"
           value={summary.totalCustomers}
           description={`${summary.newCustomers} new customers registered`}
-          icon={<span className="text-xl">👥</span>}
+          icon={<UsersIcon className="h-6 w-6 text-purple-600" />}
         />
       </section>
 
@@ -77,25 +87,25 @@ export function DashboardPage() {
           title="Low Stock Variants"
           value={summary.lowStockVariants}
           description="Variants at or below low stock threshold"
-          icon={<span className="text-xl">⚠️</span>}
+          icon={<AlertIcon className="h-6 w-6 text-amber-500" />}
         />
         <AdminStatsCard
           title="Out of Stock Variants"
           value={summary.outOfStockVariants}
           description="Variants with 0 available stock"
-          icon={<span className="text-xl">🚫</span>}
+          icon={<BanIcon className="h-6 w-6 text-rose-500" />}
         />
         <AdminStatsCard
           title="Pending Reviews"
           value={summary.pendingReviews}
           description="Customer reviews awaiting moderation"
-          icon={<span className="text-xl">★</span>}
+          icon={<StarIcon filled={true} className="h-6 w-6 text-amber-400" />}
         />
         <AdminStatsCard
           title="Open Returns / Exchanges"
           value={summary.openReturns}
           description="Return requests requiring admin decision"
-          icon={<span className="text-xl">↩</span>}
+          icon={<RefreshIcon className="h-6 w-6 text-cyan-600" />}
         />
       </section>
 

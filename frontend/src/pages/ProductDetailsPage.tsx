@@ -10,6 +10,18 @@ import { formatPrice } from "../utils/formatPrice";
 import ProductCard from "../components/product/ProductCard";
 import type { Product } from "../types/product";
 import type { PublicReview, RatingSummary } from "../types/review";
+import {
+  HeartIcon,
+  SearchIcon,
+  ShareIcon,
+  CheckIcon,
+  CheckCircleIcon,
+  StarIcon,
+  StarRating,
+  TruckIcon,
+  CloseIcon,
+  AlertIcon,
+} from "../components/common/Icons";
 
 export function ProductDetailsPage() {
   const { productId } = useParams<{ productId: string }>();
@@ -425,7 +437,9 @@ export function ProductDetailsPage() {
     return (
       <main className="mx-auto max-w-7xl px-4 py-16 text-center sm:px-6">
         <div className="mx-auto max-w-md rounded-2xl border border-red-200 bg-red-50 p-8 space-y-4 shadow-xs">
-          <div className="text-3xl">⚠️</div>
+          <div className="flex justify-center text-rose-500">
+            <AlertIcon className="h-10 w-10" />
+          </div>
           <h2 className="text-lg font-bold text-red-900">We couldn't load product availability</h2>
           <p className="text-xs text-red-700 font-medium">{loadError || "Product details are currently unavailable."}</p>
           <button
@@ -518,9 +532,10 @@ export function ProductDetailsPage() {
               className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 shadow-xs backdrop-blur-xs hover:bg-white transition cursor-pointer"
               aria-label={isProductInWishlist ? "Remove from wishlist" : "Add to wishlist"}
             >
-              <span className={`text-base ${isProductInWishlist ? "text-red-500" : "text-gray-500"}`}>
-                {isProductInWishlist ? "❤️" : "🤍"}
-              </span>
+              <HeartIcon
+                filled={isProductInWishlist}
+                className={`h-5 w-5 transition-colors ${isProductInWishlist ? "text-rose-600 fill-rose-600" : "text-[#20252B]"}`}
+              />
             </button>
 
             {/* Lightbox trigger button */}
@@ -530,9 +545,10 @@ export function ProductDetailsPage() {
                 e.stopPropagation();
                 setIsLightboxOpen(true);
               }}
-              className="absolute right-3 bottom-3 z-10 rounded-xl bg-white/85 p-2 text-xs font-bold text-[#20252B] shadow-xs backdrop-blur-xs hover:bg-white transition cursor-pointer"
+              className="absolute right-3 bottom-3 z-10 flex items-center gap-1 rounded-xl bg-white/85 px-2.5 py-2 text-xs font-bold text-[#20252B] shadow-xs backdrop-blur-xs hover:bg-white transition cursor-pointer"
             >
-              🔍 Expand
+              <SearchIcon className="h-3.5 w-3.5" />
+              <span>Expand</span>
             </button>
           </div>
 
@@ -572,9 +588,19 @@ export function ProductDetailsPage() {
               <button
                 type="button"
                 onClick={handleCopyLink}
-                className="text-xs font-bold text-gray-500 hover:text-black transition flex items-center gap-1 cursor-pointer"
+                className="text-xs font-bold text-gray-500 hover:text-black transition flex items-center gap-1.5 cursor-pointer"
               >
-                {copiedLink ? "✓ Link Copied!" : "🔗 Share"}
+                {copiedLink ? (
+                  <>
+                    <CheckIcon className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-emerald-600">Link Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <ShareIcon className="h-3.5 w-3.5" />
+                    <span>Share</span>
+                  </>
+                )}
               </button>
             </div>
 
@@ -584,10 +610,7 @@ export function ProductDetailsPage() {
 
             {/* Ratings summary line */}
             <div className="flex items-center gap-2 text-xs font-semibold text-[#667085] pt-1">
-              <div className="flex text-amber-400">
-                {"★".repeat(Math.round(avgRating))}
-                {"☆".repeat(5 - Math.round(avgRating))}
-              </div>
+              <StarRating rating={avgRating} starClassName="h-3.5 w-3.5" />
               <span className="font-bold text-gray-900">{avgRating > 0 ? avgRating.toFixed(1) : "No reviews"}</span>
               <span>•</span>
               <a href="#reviews-section" className="underline hover:text-[#20252B] transition">
@@ -768,7 +791,8 @@ export function ProductDetailsPage() {
           {/* Delivery Estimate */}
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-1 text-xs">
             <div className="flex items-center gap-2 font-bold text-gray-900">
-              <span>🚚</span> Estimated Delivery: <span className="text-black">{deliveryDates}</span>
+              <TruckIcon className="h-4 w-4 text-[#748779] shrink-0" />
+              <span>Estimated Delivery:</span> <span className="text-black">{deliveryDates}</span>
             </div>
             <p className="text-gray-500 font-medium">Free standard shipping on orders over PKR 5,000.</p>
           </div>
@@ -801,9 +825,10 @@ export function ProductDetailsPage() {
               <button
                 type="button"
                 onClick={() => setIsReviewModalOpen(true)}
-                className="rounded-xl bg-black px-4 py-2 text-xs font-bold text-white hover:bg-gray-800 transition cursor-pointer shadow-xs"
+                className="flex items-center gap-1.5 rounded-xl bg-black px-4 py-2 text-xs font-bold text-white hover:bg-gray-800 transition cursor-pointer shadow-xs"
               >
-                ★ Write a Review
+                <StarIcon filled={true} className="h-3.5 w-3.5 text-amber-400" />
+                <span>Write a Review</span>
               </button>
             ) : user ? (
               <span className="text-xs text-gray-500 font-semibold italic">
@@ -832,11 +857,12 @@ export function ProductDetailsPage() {
                   key={star}
                   type="button"
                   onClick={() => setSelectedRatingFilter(star)}
-                  className={`rounded-lg px-2.5 py-1.5 transition cursor-pointer ${
+                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 transition cursor-pointer ${
                     selectedRatingFilter === star ? "bg-black text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
-                  {star} ★
+                  <span>{star}</span>
+                  <StarIcon filled={true} className="h-3 w-3 text-amber-400" />
                 </button>
               ))}
             </div>
@@ -856,10 +882,7 @@ export function ProductDetailsPage() {
           <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 space-y-4 h-fit">
             <div className="text-center space-y-1">
               <span className="text-4xl font-extrabold text-gray-950">{avgRating.toFixed(1)}</span>
-              <div className="flex justify-center text-amber-400 text-lg">
-                {"★".repeat(Math.round(avgRating))}
-                {"☆".repeat(5 - Math.round(avgRating))}
-              </div>
+              <StarRating rating={avgRating} starClassName="h-5 w-5" className="flex justify-center gap-1 text-amber-400" />
               <p className="text-xs text-gray-500 font-semibold">Based on {reviewCount} verified reviews</p>
             </div>
 
@@ -870,7 +893,9 @@ export function ProductDetailsPage() {
                   const pct = reviewCount > 0 ? (count / reviewCount) * 100 : 0;
                   return (
                     <div key={star} className="flex items-center gap-2">
-                      <span className="w-8 font-bold text-gray-600">{star} ★</span>
+                      <span className="w-10 font-bold text-gray-600 flex items-center gap-0.5">
+                        {star} <StarIcon filled={true} className="h-3 w-3 text-amber-400" />
+                      </span>
                       <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
                         <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
                       </div>
@@ -896,14 +921,12 @@ export function ProductDetailsPage() {
                   <article key={rev.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xs space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className="flex text-amber-400 text-xs">
-                          {"★".repeat(rev.rating)}
-                          {"☆".repeat(5 - rev.rating)}
-                        </div>
+                        <StarRating rating={rev.rating} starClassName="h-3.5 w-3.5" />
                         <span className="font-bold text-xs text-gray-950">{rev.reviewerName}</span>
                         {rev.verifiedPurchase && (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
-                            ✓ Verified Purchase
+                          <span className="inline-flex items-center gap-1 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-800">
+                            <CheckCircleIcon className="h-3 w-3 text-emerald-700" />
+                            <span>Verified Purchase</span>
                           </span>
                         )}
                       </div>
@@ -951,9 +974,9 @@ export function ProductDetailsPage() {
             <button
               type="button"
               onClick={() => setIsReviewModalOpen(false)}
-              className="absolute right-5 top-5 text-gray-400 hover:text-black text-2xl font-light cursor-pointer"
+              className="absolute right-5 top-5 text-gray-400 hover:text-black cursor-pointer"
             >
-              ✕
+              <CloseIcon className="h-5 w-5" />
             </button>
 
             <div>
@@ -984,9 +1007,12 @@ export function ProductDetailsPage() {
                         onMouseEnter={() => setHoverRating(star)}
                         onMouseLeave={() => setHoverRating(0)}
                         aria-label={`Rate ${star} out of 5 stars`}
-                        className="text-2xl transition-transform hover:scale-110 cursor-pointer focus:outline-none"
+                        className="transition-transform hover:scale-110 cursor-pointer focus:outline-none"
                       >
-                        <span className={active ? "text-amber-400" : "text-gray-300"}>★</span>
+                        <StarIcon
+                          filled={active}
+                          className={`h-7 w-7 ${active ? "text-amber-400" : "text-gray-300"}`}
+                        />
                       </button>
                     );
                   })}
@@ -1054,9 +1080,9 @@ export function ProductDetailsPage() {
             <button
               type="button"
               onClick={() => setIsLightboxOpen(false)}
-              className="text-white text-3xl font-light hover:text-gray-400 transition cursor-pointer"
+              className="text-white hover:text-gray-400 transition cursor-pointer"
             >
-              ✕
+              <CloseIcon className="h-6 w-6" />
             </button>
           </div>
 
@@ -1089,9 +1115,9 @@ export function ProductDetailsPage() {
             <button
               type="button"
               onClick={() => setIsSizeGuideOpen(false)}
-              className="absolute right-5 top-5 text-gray-400 hover:text-black text-2xl font-light cursor-pointer"
+              className="absolute right-5 top-5 text-gray-400 hover:text-black cursor-pointer"
             >
-              ✕
+              <CloseIcon className="h-5 w-5" />
             </button>
             <h3 className="text-xl font-extrabold text-gray-950 tracking-tight">Sizing Guide</h3>
             <p className="text-xs text-gray-500 font-medium">Verify standard international conversions below.</p>

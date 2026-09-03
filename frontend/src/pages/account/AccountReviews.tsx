@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { reviewApi } from "../../services/review-api";
 import type { ReviewItem } from "../../types/review";
+import { StarRating } from "../../components/common/Icons";
 
 export function AccountReviews() {
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
@@ -78,10 +79,7 @@ export function AccountReviews() {
                 <span className="text-[10px] text-gray-400 font-semibold">{new Date(rev.createdAt).toLocaleDateString("en-PK")}</span>
               </div>
 
-              <div className="flex text-amber-400 text-sm">
-                {"★".repeat(rev.rating)}
-                {"☆".repeat(5 - rev.rating)}
-              </div>
+              <StarRating rating={rev.rating} starClassName="h-4 w-4" />
 
               {rev.title && <h4 className="text-xs font-bold text-gray-900">{rev.title}</h4>}
               <p className="text-xs text-gray-600 font-medium">{rev.comment}</p>

@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router";
 import { catalogAdminApi } from "../../services/admin/catalog-admin-api";
 import type { AdminBrand, AdminCategory } from "../../types/admin";
 import AdminFormField from "../../components/admin/AdminFormField";
+import { CloseIcon } from "../../components/common/Icons";
 
 interface ProductImageFormItem {
   id?: string;
@@ -1026,9 +1027,9 @@ export function ProductFormPage() {
               <button
                 type="button"
                 onClick={() => setAdjustModalVariant(null)}
-                className="text-gray-400 hover:text-black font-bold text-lg cursor-pointer"
+                className="text-gray-400 hover:text-black cursor-pointer"
               >
-                ✕
+                <CloseIcon className="h-5 w-5" />
               </button>
             </div>
 

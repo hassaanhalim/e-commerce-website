@@ -4,6 +4,7 @@ import { orderApi } from "../../services/order-api";
 import type { BackendOrder, OrderStatus, PaymentStatus } from "../../types/order";
 import { formatPrice } from "../../utils/formatPrice";
 import AdminStatusBadge from "../../components/admin/AdminStatusBadge";
+import { CheckCircleIcon, AlertIcon, PhoneIcon } from "../../components/common/Icons";
 
 export function OrderDetailPage() {
   const { orderId } = useParams<{ orderId: string }>();
@@ -134,14 +135,16 @@ export function OrderDetailPage() {
       </div>
 
       {successMessage && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800">
-          ✓ {successMessage}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-4 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{successMessage}</span>
         </div>
       )}
 
       {error && (
-        <div className="rounded-xl bg-red-50 border border-red-200 p-4 text-xs font-semibold text-red-700">
-          ⚠ {error}
+        <div className="flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-200 p-4 text-xs font-semibold text-red-700">
+          <AlertIcon className="h-4 w-4 text-red-600 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
@@ -253,7 +256,10 @@ export function OrderDetailPage() {
             <p className="font-bold text-gray-950 text-sm">{order.shippingAddressSnapshot.recipientName}</p>
             <p className="text-gray-600">{order.shippingAddressSnapshot.addressLine1}</p>
             <p className="text-gray-500">{order.shippingAddressSnapshot.city}, {order.shippingAddressSnapshot.country}</p>
-            <p className="text-gray-400">📞 {order.shippingAddressSnapshot.phone}</p>
+            <p className="text-gray-400 flex items-center gap-1.5">
+              <PhoneIcon className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+              <span>{order.shippingAddressSnapshot.phone}</span>
+            </p>
           </div>
 
           {/* Financial Breakdown */}

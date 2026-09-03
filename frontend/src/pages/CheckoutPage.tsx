@@ -7,6 +7,14 @@ import { orderApi } from "../services/order-api";
 import type { BackendAddress, CheckoutPreviewResult } from "../types/auth";
 import type { PaymentMethod } from "../types/order";
 import { formatPrice } from "../utils/formatPrice";
+import {
+  LocationPinIcon,
+  PhoneIcon,
+  TruckIcon,
+  CreditCardIcon,
+  CheckIcon,
+  CloseIcon,
+} from "../components/common/Icons";
 
 export function CheckoutPage() {
   const navigate = useNavigate();
@@ -261,7 +269,7 @@ export function CheckoutPage() {
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-950 flex items-center gap-2">
-                <span>📍</span> Shipping Address
+                <LocationPinIcon className="h-5 w-5 text-[#748779]" /> Shipping Address
               </h2>
               <button
                 type="button"
@@ -375,7 +383,10 @@ export function CheckoutPage() {
                       </div>
                       <p className="mt-1 text-gray-600 font-medium">{addr.addressLine1}{addr.addressLine2 ? `, ${addr.addressLine2}` : ""}</p>
                       <p className="text-gray-500">{addr.city}, {addr.stateOrProvince || ""} {addr.postalCode || ""}</p>
-                      <p className="text-gray-400 mt-0.5">📞 {addr.phone}</p>
+                      <p className="text-gray-400 mt-0.5 flex items-center gap-1.5">
+                        <PhoneIcon className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                        <span>{addr.phone}</span>
+                      </p>
                     </div>
                   </label>
                 ))}
@@ -386,7 +397,7 @@ export function CheckoutPage() {
           {/* Section 2: Shipping Method Selection */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
             <h2 className="text-lg font-bold text-gray-950 flex items-center gap-2">
-              <span>🚚</span> Delivery Options
+              <TruckIcon className="h-5 w-5 text-[#748779]" /> Delivery Options
             </h2>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -437,7 +448,7 @@ export function CheckoutPage() {
           {/* Section 3: Payment Method Selection */}
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
             <h2 className="text-lg font-bold text-gray-950 flex items-center gap-2">
-              <span>💳</span> Payment Method
+              <CreditCardIcon className="h-5 w-5 text-[#748779]" /> Payment Method
             </h2>
 
             <div className="space-y-3">
@@ -561,8 +572,8 @@ export function CheckoutPage() {
       {pendingOrderId && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-6 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 text-2xl">
-              💳
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-800">
+              <CreditCardIcon className="h-7 w-7" />
             </div>
             <div>
               <h3 className="text-xl font-extrabold text-gray-950">Mock Payment Simulation</h3>
@@ -576,18 +587,32 @@ export function CheckoutPage() {
                 type="button"
                 onClick={() => handleMockPaymentResult(true)}
                 disabled={isProcessingMockPayment}
-                className="rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer"
               >
-                {isProcessingMockPayment ? "Processing..." : "✓ Simulate Success"}
+                {isProcessingMockPayment ? (
+                  "Processing..."
+                ) : (
+                  <>
+                    <CheckIcon className="h-4 w-4" />
+                    <span>Simulate Success</span>
+                  </>
+                )}
               </button>
 
               <button
                 type="button"
                 onClick={() => handleMockPaymentResult(false)}
                 disabled={isProcessingMockPayment}
-                className="rounded-xl bg-red-600 py-3 text-xs font-bold text-white hover:bg-red-700 transition disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 py-3 text-xs font-bold text-white hover:bg-red-700 transition disabled:opacity-50 cursor-pointer"
               >
-                {isProcessingMockPayment ? "Processing..." : "✕ Simulate Failure"}
+                {isProcessingMockPayment ? (
+                  "Processing..."
+                ) : (
+                  <>
+                    <CloseIcon className="h-4 w-4" />
+                    <span>Simulate Failure</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

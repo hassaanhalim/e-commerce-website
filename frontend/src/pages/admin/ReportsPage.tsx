@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { adminApi } from "../../services/admin-api";
 import { formatPrice } from "../../utils/formatPrice";
+import { DownloadIcon } from "../../components/common/Icons";
 
 export function ReportsPage() {
   const [activeTab, setActiveTab] = useState<"sales" | "orders" | "products" | "inventory" | "customers" | "returns">("sales");
@@ -86,9 +87,10 @@ export function ReportsPage() {
             <button
               type="button"
               onClick={handleExportCSV}
-              className="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-1.5 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition cursor-pointer"
             >
-              📥 Export CSV
+              <DownloadIcon className="h-3.5 w-3.5" />
+              <span>Export CSV</span>
             </button>
           )}
         </div>

@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { returnApi } from "../../services/return-api";
 import type { ReturnRequestItem } from "../../types/return";
 import { formatPrice } from "../../utils/formatPrice";
+import { CheckCircleIcon, AlertIcon } from "../../components/common/Icons";
 
 export function AccountReturns() {
   const [requests, setRequests] = useState<ReturnRequestItem[]>([]);
@@ -10,6 +11,7 @@ export function AccountReturns() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const fetchRequests = () => {
     setLoading(true);
@@ -29,6 +31,7 @@ export function AccountReturns() {
 
   const handleCancelRequest = async (id: string) => {
     setActionMessage("");
+    setActionError("");
     try {
       await returnApi.cancelCustomerReturn(id);
       setActionMessage("Return request cancelled successfully.");
@@ -37,7 +40,7 @@ export function AccountReturns() {
       const msg = typeof err === "object" && err !== null && "message" in err
         ? (err as { message: string }).message
         : "Failed to cancel request.";
-      setActionMessage(`⚠ ${msg}`);
+      setActionError(msg);
     }
   };
 
@@ -51,8 +54,15 @@ export function AccountReturns() {
       </div>
 
       {actionMessage && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
-          {actionMessage}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{actionMessage}</span>
+        </div>
+      )}
+      {actionError && (
+        <div className="flex items-center gap-1.5 rounded-xl bg-red-50 border border-red-200 p-3 text-xs font-semibold text-red-700">
+          <AlertIcon className="h-4 w-4 text-red-600 shrink-0" />
+          <span>{actionError}</span>
         </div>
       )}
 

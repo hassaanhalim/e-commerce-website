@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { CheckIcon, AlertIcon } from "../components/common/Icons";
 
 type ToastTone = "success" | "error" | "info" | "warning";
 
@@ -52,14 +53,13 @@ function toneStyles(tone: ToastTone) {
 function ToastIcon({ tone }: { tone: ToastTone }) {
   switch (tone) {
     case "success":
-      return <span aria-hidden="true">✓</span>;
+      return <CheckIcon className="h-3.5 w-3.5" />;
     case "error":
-      return <span aria-hidden="true">!</span>;
     case "warning":
-      return <span aria-hidden="true">!</span>;
+      return <AlertIcon className="h-3.5 w-3.5" />;
     case "info":
     default:
-      return <span aria-hidden="true">i</span>;
+      return <span aria-hidden="true" className="font-bold text-xs">i</span>;
   }
 }
 

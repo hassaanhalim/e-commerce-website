@@ -3,6 +3,12 @@ import { reviewApi } from "../../services/review-api";
 import type { ReviewItem, ReviewStatus } from "../../types/review";
 import AdminTable, { type Column } from "../../components/admin/AdminTable";
 import AdminStatusBadge from "../../components/admin/AdminStatusBadge";
+import {
+  StarRating,
+  CheckCircleIcon,
+  CheckIcon,
+  CloseIcon,
+} from "../../components/common/Icons";
 
 export function ReviewsPage() {
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
@@ -77,9 +83,10 @@ export function ReviewsPage() {
     {
       header: "Rating",
       accessor: (row) => (
-        <span className="font-bold text-amber-500">
-          {"★".repeat(row.rating)} ({row.rating}/5)
-        </span>
+        <div className="flex items-center gap-1.5">
+          <StarRating rating={row.rating} starClassName="h-3.5 w-3.5" />
+          <span className="text-xs font-semibold text-gray-500">({row.rating}/5)</span>
+        </div>
       ),
       sortable: true,
     },
@@ -134,8 +141,9 @@ export function ReviewsPage() {
       </div>
 
       {actionSuccess && (
-        <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
-          ✓ {actionSuccess}
+        <div className="flex items-center gap-1.5 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs font-semibold text-emerald-800">
+          <CheckCircleIcon className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span>{actionSuccess}</span>
         </div>
       )}
 
@@ -193,13 +201,15 @@ export function ReviewsPage() {
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-extrabold text-gray-950">Moderate Review</h3>
-              <button type="button" onClick={() => setSelectedReview(null)} className="text-gray-400 hover:text-black">✕</button>
+              <button type="button" onClick={() => setSelectedReview(null)} className="text-gray-400 hover:text-black cursor-pointer">
+                <CloseIcon className="h-5 w-5" />
+              </button>
             </div>
 
             <div className="text-xs space-y-1">
               <p className="font-bold text-gray-900">{selectedReview.product?.name}</p>
               <p className="text-gray-500">By {selectedReview.user?.fullName} ({selectedReview.user?.email})</p>
-              <div className="flex text-amber-400">{"★".repeat(selectedReview.rating)}</div>
+              <StarRating rating={selectedReview.rating} starClassName="h-4 w-4" />
               {selectedReview.title && <p className="font-bold text-gray-800">{selectedReview.title}</p>}
               <p className="text-gray-600 bg-gray-50 p-2.5 rounded-xl mt-1">{selectedReview.comment}</p>
             </div>
@@ -220,18 +230,20 @@ export function ReviewsPage() {
                 type="button"
                 onClick={() => handleModerate("APPROVED")}
                 disabled={submitting}
-                className="rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
               >
-                ✓ Approve Review
+                <CheckIcon className="h-4 w-4" />
+                <span>Approve Review</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleModerate("REJECTED")}
                 disabled={submitting}
-                className="rounded-xl bg-red-600 py-3 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-600 py-3 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50 cursor-pointer"
               >
-                ✕ Reject Review
+                <CloseIcon className="h-4 w-4" />
+                <span>Reject Review</span>
               </button>
             </div>
           </div>
