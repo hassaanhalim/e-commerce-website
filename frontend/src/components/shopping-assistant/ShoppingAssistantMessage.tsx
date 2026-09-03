@@ -1,5 +1,6 @@
 import type { ChatMessage } from "./types";
 import ShoppingAssistantProductCard from "./ShoppingAssistantProductCard";
+import FormattedMessageContent from "./FormattedMessageContent";
 
 interface ShoppingAssistantMessageProps {
   message: ChatMessage;
@@ -61,9 +62,9 @@ export function ShoppingAssistantMessage({ message }: ShoppingAssistantMessagePr
   return (
     <div className="flex items-start gap-2 animate-fadeIn">
       <AssistantAvatar />
-      <div className={`flex flex-col items-start ${hasProducts ? "w-full min-w-0 max-w-[95%]" : "max-w-[85%]"}`}>
-        <div className="rounded-2xl rounded-tl-xs border border-[#E7E3DC] bg-[#F7F5F1] px-3.5 py-2.5 text-sm leading-relaxed text-[#20252B] shadow-xs break-words whitespace-pre-wrap">
-          {message.content}
+      <div className={`flex flex-col items-start ${hasProducts ? "w-full min-w-0 max-w-[95%]" : "max-w-[92%]"}`}>
+        <div className="w-full rounded-2xl rounded-tl-xs border border-[#E7E3DC] bg-[#F7F5F1] px-4 py-3 text-sm leading-relaxed text-[#20252B] shadow-xs break-words">
+          <FormattedMessageContent content={message.content} />
         </div>
 
         {/* Real Product Recommendation Cards */}

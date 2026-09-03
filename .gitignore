@@ -156,3 +156,13 @@ uploads/
 
 secrets/
 **/secrets/
+
+
+# ============================================================
+# LOCAL CHATBOT BACKUP & QA TEST SCRATCH
+# ============================================================
+
+chatbot-backup/
+**/chatbot-backup/
+scratch/
+**/scratch/

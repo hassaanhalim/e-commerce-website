@@ -1,25 +1,11 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import {
-  IsArray,
-  IsIn,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  MaxLength,
-  ValidateNested,
-} from "class-validator";
+import { IsArray, IsNotEmpty, IsOptional, IsString, MaxLength } from "class-validator";
 import { Type } from "class-transformer";
-import type {
-  PendingQuestion,
-  ShoppingPreferences,
-} from "../types/shopping-assistant.types";
 
-export class HistoryMessageDto {
-  @ApiProperty({ enum: ["user", "assistant"] })
-  @IsIn(["user", "assistant"])
+export class MessageHistoryItemDto {
+  @IsString()
+  @IsNotEmpty()
   role!: "user" | "assistant";
 
-  @ApiProperty()
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)
@@ -27,42 +13,23 @@ export class HistoryMessageDto {
 }
 
 export class ChatRequestDto {
-  @ApiPropertyOptional({
-    description: "Optional conversation ID for authenticated users to continue an existing chat.",
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  conversationId?: string;
-
-  @ApiProperty({
-    example: "I need running shoes under 15000",
-    description: "The customer message to process.",
-  })
   @IsString()
   @IsNotEmpty()
   @MaxLength(1000)
   message!: string;
 
-  @ApiPropertyOptional({
-    type: [HistoryMessageDto],
-    description: "Recent message history for conversational context.",
-  })
+  @IsOptional()
+  @IsString()
+  conversationId?: string;
+
   @IsOptional()
   @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => HistoryMessageDto)
-  messages?: HistoryMessageDto[];
+  @Type(() => MessageHistoryItemDto)
+  messages?: MessageHistoryItemDto[];
 
-  @ApiPropertyOptional({
-    description: "Current authoritative client preferences to merge against.",
-  })
   @IsOptional()
-  preferences?: ShoppingPreferences;
+  preferences?: Record<string, any>;
 
-  @ApiPropertyOptional({
-    description: "The question that was pending customer response in the previous turn.",
-  })
   @IsOptional()
-  pendingQuestion?: PendingQuestion | null;
+  pendingQuestion?: any;
 }
